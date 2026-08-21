@@ -52,8 +52,8 @@ The first supported upgrade is a new version-0 database to version 1. Future mig
 ## Validation
 
 - Unit tests cover adapter lifecycle, parameter binding, transaction rollback, clean creation, no-op migration reruns, duplicate migration rejection, unsupported-version handling, and rollback of a failed pending migration. The adapter is exercised through an owned DuckDB driver boundary so host tests do not depend on a desktop native binary.
-- The Android integration test opens an app-private DuckDB file, writes a probe row, closes, reopens, and reads the row. It runs on the configured Android device runner after merge to the default branch.
-- Flutter analysis, tests, Android debug build, and generated-code validation run in CI/local validation. The Android emulator available in this development environment cannot run its ARM image, so device-runner evidence remains required before this milestone can be marked complete.
+- The Android integration test opens an app-private DuckDB file, writes a probe row, closes, reopens, and reads the row. It passed through `pnpm test:flutter:integration` and remains configured for the Android device runner after merge to the default branch.
+- Flutter analysis, tests, Android debug build, and generated-code validation run in CI/local validation.
 
 ## Follow-up
 

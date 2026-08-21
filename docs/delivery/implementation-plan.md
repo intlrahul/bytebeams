@@ -55,7 +55,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 2: DuckDB feasibility and persistence foundation
 
-**Status:** `IN PROGRESS`
+**Status:** `COMPLETE`
 
 **Goal:** Retire the highest-risk local-first dependency before building features on it.
 
@@ -77,7 +77,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 **Excluded:** fleet feature schema, network synchronization, iOS/web support claims, and product screens.
 
-**Resolved decisions:** use the application-support directory, one serialized app-scoped connection, one transaction for pending migrations, and support version-0-to-1 now; each future migration must test the immediately preceding production version. See ADR 0001. Device-runner integration evidence is still required before this milestone is complete.
+**Resolved decisions:** use the application-support directory, one serialized app-scoped connection, one transaction for pending migrations, and support version-0-to-1 now; each future migration must test the immediately preceding production version. See ADR 0001. Android device-runner integration evidence passed via `pnpm test:flutter:integration`.
 
 ## Milestone 3: domain and telemetry model
 
