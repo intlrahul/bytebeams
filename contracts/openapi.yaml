@@ -1,0 +1,226 @@
+openapi: 3.0.3
+info:
+  title: ByteBeams Demo Fleet API
+  version: 0.0.0
+  description: Deterministic bootstrap and telemetry transport for the ByteBeams take-home.
+  license:
+    name: UNLICENSED
+security: []
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: Check server availability
+      operationId: getHealth
+      responses:
+        '200':
+          description: Server is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /bootstrap:
+    get:
+      summary: Bootstrap the local fleet database
+      operationId: getBootstrap
+      responses:
+        '200':
+          description: Consistent registry, telemetry backfill, and delivery cursor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /telemetry:
+    get:
+      summary: Stream live telemetry deliveries
+      operationId: streamTelemetry
+      description: Streams TelemetryDelivery events. Reconnect with Last-Event-ID.
+      parameters:
+        - name: after
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeliveryCursor'
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema:
+            $ref: '#/components/schemas/DeliveryCursor'
+      responses:
+        '200':
+          description: Server-sent event stream. Each data field is a TelemetryDelivery JSON object.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-cache
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              x-sse-event-schema:
+                $ref: '#/components/schemas/TelemetryDelivery'
+        '409':
+          description: Requested cursor is older than retained delivery history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplayGap'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  responses:
+    ServerError:
+      description: Unexpected sanitized server failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    Vehicle:
+      type: object
+      additionalProperties: false
+      required: [vehicleId, registrationNumber, model]
+      properties:
+        vehicleId:
+          type: string
+          minLength: 1
+        registrationNumber:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+    LocationValue:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude, accuracyMeters]
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+        accuracyMeters:
+          type: number
+          format: double
+          minimum: 0
+    SignalValue:
+      type: object
+      description: Tagged transport value. Validation decides whether it is supported and valid.
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [number, boolean, string, location, 'null', json]
+        numberValue:
+          type: number
+          format: double
+          nullable: true
+        booleanValue:
+          type: boolean
+          nullable: true
+        stringValue:
+          type: string
+          nullable: true
+        locationValue:
+          allOf:
+            - $ref: '#/components/schemas/LocationValue'
+        jsonValue:
+          type: object
+          additionalProperties: true
+          nullable: true
+    TelemetryPacket:
+      type: object
+      additionalProperties: false
+      required: [packetId, vehicleId, eventTimestamp, signalName, value]
+      properties:
+        packetId:
+          type: string
+          minLength: 1
+        vehicleId:
+          type: string
+          minLength: 1
+        eventTimestamp:
+          type: string
+          format: date-time
+        signalName:
+          type: string
+          minLength: 1
+        value:
+          $ref: '#/components/schemas/SignalValue'
+        serverReceivedAt:
+          type: string
+          format: date-time
+          nullable: true
+    DeliveryCursor:
+      type: string
+      pattern: '^[0-9]+$'
+      example: '42'
+    TelemetryDelivery:
+      type: object
+      additionalProperties: false
+      required: [deliveryId, packet]
+      properties:
+        deliveryId:
+          $ref: '#/components/schemas/DeliveryCursor'
+        packet:
+          $ref: '#/components/schemas/TelemetryPacket'
+    BootstrapResponse:
+      type: object
+      additionalProperties: false
+      required: [vehicles, telemetry, deliveryCursor]
+      properties:
+        vehicles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vehicle'
+        telemetry:
+          type: array
+          items:
+            $ref: '#/components/schemas/TelemetryPacket'
+        deliveryCursor:
+          $ref: '#/components/schemas/DeliveryCursor'
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        diagnosticId:
+          type: string
+          nullable: true
+    ReplayGap:
+      type: object
+      additionalProperties: false
+      required: [code, requestedCursor, oldestAvailableCursor]
+      properties:
+        code:
+          type: string
+          enum: [replay_gap]
+        requestedCursor:
+          $ref: '#/components/schemas/DeliveryCursor'
+        oldestAvailableCursor:
+          $ref: '#/components/schemas/DeliveryCursor'

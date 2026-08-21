@@ -1,0 +1,142 @@
+stages:
+  - validate
+  - test
+  - build
+  - integration
+  - notify
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+variables:
+  FLUTTER_VERSION: "3.47.0"
+  NODE_VERSION: "24.19.0"
+  PNPM_STORE_DIR: "$CI_PROJECT_DIR/.pnpm-store"
+
+.node_job:
+  image: node:24.19.0-bookworm
+  before_script:
+    - corepack enable pnpm
+    - corepack prepare pnpm@11.22.0 --activate
+    - pnpm config set store-dir "$PNPM_STORE_DIR"
+    - pnpm install --frozen-lockfile
+  cache:
+    key: pnpm-$CI_COMMIT_REF_SLUG
+    paths:
+      - .pnpm-store
+
+.flutter_job:
+  image: ghcr.io/cirruslabs/flutter:3.47.0
+  before_script:
+    - flutter config --no-analytics
+    - cd apps/mobile
+    - flutter pub get --enforce-lockfile
+
+openapi_validate:
+  extends: .node_job
+  stage: validate
+  script:
+    - pnpm openapi:lint
+
+generated_code_check:
+  image: ghcr.io/cirruslabs/flutter:3.47.0
+  stage: validate
+  before_script:
+    - apt-get update
+    - apt-get install --yes --no-install-recommends curl openjdk-17-jre-headless xz-utils
+    - curl --fail --location "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" --output /tmp/node.tar.xz
+    - mkdir --parents /opt/node
+    - tar --extract --xz --file /tmp/node.tar.xz --directory /opt/node --strip-components 1
+    - export PATH="/opt/node/bin:$PATH"
+    - corepack enable pnpm
+    - corepack prepare pnpm@11.22.0 --activate
+    - pnpm install --frozen-lockfile
+    - flutter config --no-analytics
+  script:
+    - pnpm generate
+    - git diff --exit-code
+
+server_quality:
+  extends: .node_job
+  stage: validate
+  script:
+    - pnpm format:check:server
+    - pnpm lint:server
+    - pnpm typecheck
+
+flutter_quality:
+  extends: .flutter_job
+  stage: validate
+  script:
+    - dart format --output=none --set-exit-if-changed .
+    - flutter analyze
+
+server_test:
+  extends: .node_job
+  stage: test
+  script:
+    - pnpm test:server
+  artifacts:
+    when: always
+    paths:
+      - apps/server/coverage/
+
+flutter_test:
+  extends: .flutter_job
+  stage: test
+  script:
+    - flutter test --coverage
+    - dart run ../../tooling/coverage/check_lcov.dart coverage/lcov.info 90
+  artifacts:
+    when: always
+    paths:
+      - apps/mobile/coverage/
+
+server_build:
+  extends: .node_job
+  stage: build
+  script:
+    - pnpm build:server
+
+android_debug_build:
+  extends: .flutter_job
+  stage: build
+  script:
+    - flutter build apk --debug --no-pub
+  artifacts:
+    paths:
+      - apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
+
+android_integration_test:
+  extends: .flutter_job
+  stage: integration
+  tags:
+    - android-emulator
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
+  script:
+    - test -n "$ANDROID_DEVICE_ID"
+    - flutter test integration_test/app_smoke_test.dart --device-id "$ANDROID_DEVICE_ID"
+  artifacts:
+    when: always
+    paths:
+      - apps/mobile/build/
+
+notify_integration_failure:
+  image: curlimages/curl:8.16.0
+  stage: notify
+  needs:
+    - job: android_integration_test
+      artifacts: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $SLACK_WEBHOOK_URL'
+      when: on_failure
+  script:
+    - >-
+      curl --fail-with-body --request POST
+      --header 'Content-Type: application/json'
+      --data "{\"text\":\"ByteBeams main integration pipeline failed: ${CI_PIPELINE_URL}\"}"
+      "$SLACK_WEBHOOK_URL"

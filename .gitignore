@@ -1,0 +1,49 @@
+# Repository-local toolchains and package-manager caches
+.toolchains/
+.pnpm-store/
+.npm/
+.cache/
+
+# FVM, Flutter, Dart, and Pub local state
+.fvm/flutter_sdk
+.fvm/versions/
+.fvm/fvm_config.json
+**/.dart_tool/
+**/.pub-cache/
+**/.pub/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+
+# Dependencies and generated build/test output
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/test-results/
+**/reports/
+*.tsbuildinfo
+.eslintcache
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs and temporary files
+*.log
+*.log.*
+*.pid
+*.seed
+*.swp
+*.swo
+*~
+
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+.fleet/
+.idea/
+*.iml
+.vscode/

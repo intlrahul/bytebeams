@@ -1,0 +1,36 @@
+{
+  "name": "bytebeams-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": "24.19.0"
+  },
+  "scripts": {
+    "build": "pnpm build:server && pnpm build:flutter",
+    "build:flutter": "cd apps/mobile && fvm flutter build apk --debug --no-pub --suppress-analytics",
+    "build:server": "pnpm --filter @bytebeams/fleet build",
+    "format": "pnpm format:server && pnpm format:flutter",
+    "format:check": "pnpm format:check:server && pnpm format:check:flutter",
+    "format:flutter": "fvm dart format apps/mobile",
+    "format:server": "pnpm --filter @bytebeams/fleet format",
+    "format:check:flutter": "fvm dart format --output=none --set-exit-if-changed apps/mobile",
+    "format:check:server": "pnpm --filter @bytebeams/fleet format:check",
+    "generate": "node tooling/openapi/generate.mjs",
+    "generate:check": "node tooling/openapi/check-generated.mjs",
+    "lint": "pnpm lint:server && pnpm lint:flutter",
+    "lint:flutter": "cd apps/mobile && fvm flutter analyze --suppress-analytics",
+    "lint:server": "pnpm --filter @bytebeams/fleet lint",
+    "openapi:lint": "redocly lint contracts/openapi.yaml",
+    "test": "pnpm test:server && pnpm test:flutter",
+    "test:flutter": "cd apps/mobile && fvm flutter test --coverage --suppress-analytics && fvm dart run ../../tooling/coverage/check_lcov.dart coverage/lcov.info 90",
+    "test:flutter:integration": "cd apps/mobile && fvm flutter test integration_test/app_smoke_test.dart --suppress-analytics",
+    "test:server": "pnpm --filter @bytebeams/fleet test:coverage",
+    "typecheck": "pnpm --filter @bytebeams/fleet typecheck"
+  },
+  "devDependencies": {
+    "@openapitools/openapi-generator-cli": "2.25.2",
+    "@redocly/cli": "2.12.3",
+    "openapi-typescript": "7.10.1"
+  }
+}
