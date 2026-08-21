@@ -14,6 +14,11 @@ final class AssetDatabaseMigrationLoader implements DatabaseMigrationLoader {
       name: 'create schema migrations',
       path: 'assets/migrations/0001_schema_migrations.sql',
     ),
+    (
+      version: 2,
+      name: 'create telemetry foundation',
+      path: 'assets/migrations/0002_telemetry_foundation.sql',
+    ),
   ];
 
   @override

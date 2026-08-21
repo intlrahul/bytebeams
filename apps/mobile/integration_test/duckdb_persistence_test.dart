@@ -1,9 +1,12 @@
 import 'dart:io';
 
 import 'package:bytebeams/core/data/database/database_migration.dart';
+import 'package:bytebeams/core/data/database/database_migration_loader.dart';
 import 'package:bytebeams/core/data/database/database_path_provider.dart';
 import 'package:bytebeams/core/data/database/duckdb_app_database.dart';
 import 'package:bytebeams/core/time/clock.dart';
+import 'package:bytebeams/features/telemetry/data/duckdb_telemetry_repository.dart';
+import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -58,6 +61,53 @@ void main() {
       if (await databaseFile.exists()) {
         await databaseFile.delete();
       }
+    },
+  );
+
+  testWidgets(
+    'given_invalid_telemetry_when_reopened_then_diagnostics_persist',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'milestone_3_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final migrations = await const AssetDatabaseMigrationLoader().load();
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      await DuckDbTelemetryRepository(database).store(
+        ClassifiedTelemetryPacket(
+          packetId: 'invalid-1',
+          vehicleId: 'vehicle-1',
+          eventTimestampUtc: DateTime.utc(2026),
+          clientReceivedAtUtc: DateTime.utc(2026),
+          signalName: 'soc',
+          rawValueJson: '{}',
+          classification: TelemetryClassification.supportedInvalid,
+          validationError: 'Signal value is invalid',
+        ),
+      );
+      await database.close();
+      final reopened = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      final result = await DuckDbTelemetryRepository(reopened)
+          .diagnosticsForVehicle('vehicle-1');
+      expect(
+        (result as Success<List<ClassifiedTelemetryPacket>, TelemetryFailure>)
+            .value
+            .single
+            .validationError,
+        'Signal value is invalid',
+      );
+      await reopened.close();
+      if (await file.exists()) await file.delete();
     },
   );
 }

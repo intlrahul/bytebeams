@@ -81,7 +81,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 3: domain and telemetry model
 
-**Status:** `NOT STARTED`
+**Status:** `COMPLETE`
 
 **Goal:** Define the stable language and validation boundaries used by persistence, transport, and features.
 
@@ -100,7 +100,9 @@ Update status only when repository evidence supports it. A milestone is not comp
 - Raw invalid values and validation errors remain queryable after restart.
 - Equal/conflicting timestamp behavior is documented and deterministic.
 
-**Resolved decisions:** validate the approved lowercase signal catalog and units in `data-and-sync.md`; accept future event timestamps up to five minutes and quarantine arrivals more than 30 days old by event time; preserve opaque nonblank identifiers; and order conflicts by event timestamp, server receipt time, then packet ID. Use domain-owned Freezed `Result` and `TelemetryFailure` unions. Implementation plan approval is still required.
+**Resolved decisions:** validate the approved lowercase signal catalog and units in `data-and-sync.md`; accept future event timestamps up to five minutes and quarantine arrivals more than 30 days old by event time; preserve opaque nonblank identifiers; and order conflicts by event timestamp, server receipt time, then packet ID. Use domain-owned Freezed `Result` and `TelemetryFailure` unions.
+
+**Validation evidence:** Flutter unit tests passed with 95.09% line coverage. Android integration tests passed, including classified invalid telemetry persisted through close/reopen and restored through diagnostics.
 
 ## Milestone 4: deterministic demo backend
 

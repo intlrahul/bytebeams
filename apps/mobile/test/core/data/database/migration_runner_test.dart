@@ -103,6 +103,26 @@ void main() {
       );
     },
   );
+
+  test('given_version_one_when_version_two_is_available_then_applies_only_version_two', () async {
+    final database = _FakeDatabase()..appliedVersions = {1};
+    final migrations = [
+      ...initialMigrations,
+      const DatabaseMigration(
+        version: 2,
+        name: 'create telemetry events',
+        sql: 'CREATE TABLE telemetry_events',
+      ),
+    ];
+
+    await MigrationRunner(
+      migrations: migrations,
+      clock: clock,
+    ).migrate(database);
+
+    expect(database.appliedVersions, {1, 2});
+    expect(database.tables, contains('telemetry_events'));
+  });
 }
 
 final class _FakeDatabase implements AppDatabase {

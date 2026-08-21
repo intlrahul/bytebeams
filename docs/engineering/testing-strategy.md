@@ -18,6 +18,8 @@ CI enforces at least **90% line coverage**. Exclusions are limited to:
 
 Do not exclude domain policies, BLoCs, repositories, SQL integration, mappers, ingestion, alerts, geofences, replay, or trips merely to satisfy the threshold.
 
+Coverage is a guardrail, not a test-design target. Add unit and integration tests because they prove each observable production behavior, branch, failure translation, and boundary condition—not because they increase a percentage. Aim to cover all production behavior; the 10% allowance is reserved only for code that cannot be meaningfully or safely exercised.
+
 ## Flutter unit and widget tests
 
 Use `flutter_test`, `bloc_test`, and `mocktail`.
@@ -59,3 +61,5 @@ Run these asynchronously after a merge to `main`, retain reports/artifacts, and 
 ## Test naming and fixtures
 
 Use `given_<condition>_when_<action>_then_<result>` test names and explicit Given/When/Then organization. Keep fixtures synthetic, minimal, UTC-based, and explain scenario intent. Do not use production or personal data. Use the applicable reference in `docs/templates/tests/` without copying irrelevant setup.
+
+When generating a dynamic test name, use braced Dart interpolation when a variable touches an underscore or alphanumeric text: `${signal}_when`, never `$signal_when`. Do not put shell-style variables or unescaped special syntax in test identifiers.
