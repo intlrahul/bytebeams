@@ -10,6 +10,10 @@
     "build": "pnpm build:server && pnpm build:flutter",
     "build:flutter": "cd apps/mobile && fvm flutter build apk --debug --no-pub --suppress-analytics",
     "build:server": "pnpm --filter @bytebeams/fleet build",
+    "commitlint:current": "commitlint --last --verbose",
+    "commitlint:message": "commitlint --edit",
+    "commitlint:range": "commitlint --verbose",
+    "commitlint:test": "node tooling/commitlint/test.mjs",
     "format": "pnpm format:server && pnpm format:flutter",
     "format:check": "pnpm format:check:server && pnpm format:check:flutter",
     "format:flutter": "fvm dart format apps/mobile",
@@ -22,6 +26,7 @@
     "lint:flutter": "cd apps/mobile && fvm flutter analyze --suppress-analytics",
     "lint:server": "pnpm --filter @bytebeams/fleet lint",
     "openapi:lint": "redocly lint contracts/openapi.yaml",
+    "prepare": "husky",
     "test": "pnpm test:server && pnpm test:flutter",
     "test:flutter": "cd apps/mobile && fvm flutter test --coverage --suppress-analytics && fvm dart run ../../tooling/coverage/check_lcov.dart coverage/lcov.info 90",
     "test:flutter:integration": "cd apps/mobile && fvm flutter test integration_test/app_smoke_test.dart --suppress-analytics",
@@ -29,8 +34,11 @@
     "typecheck": "pnpm --filter @bytebeams/fleet typecheck"
   },
   "devDependencies": {
+    "@commitlint/cli": "21.2.2",
+    "@commitlint/config-conventional": "21.2.2",
     "@openapitools/openapi-generator-cli": "2.25.2",
     "@redocly/cli": "2.12.3",
+    "husky": "9.1.7",
     "openapi-typescript": "7.10.1"
   }
 }

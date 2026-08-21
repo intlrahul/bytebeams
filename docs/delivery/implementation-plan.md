@@ -31,7 +31,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 1: delivery hygiene
 
-**Status:** `NOT STARTED`
+**Status:** `COMPLETE`
 
 **Goal:** Make contribution and commit validation deterministic before feature work expands.
 
@@ -51,7 +51,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 - Automated fixtures prove representative valid, invalid, scoped, and breaking messages.
 - Existing formatting, generation, test, and build commands remain green.
 
-**Decisions before implementation:** exact hook installation mechanism and merge-request commit range handling.
+**Decisions:** Husky installs the version-controlled hook. GitLab validates the complete merge-request range from `CI_MERGE_REQUEST_DIFF_BASE_SHA` through `CI_COMMIT_SHA` with an unshallowed checkout.
 
 ## Milestone 2: DuckDB feasibility and persistence foundation
 

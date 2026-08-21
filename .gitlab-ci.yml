@@ -8,7 +8,7 @@ stages:
 workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
     - if: '$CI_PIPELINE_SOURCE == "web"'
 
 variables:
@@ -40,6 +40,17 @@ openapi_validate:
   stage: validate
   script:
     - pnpm openapi:lint
+
+commit_message_validate:
+  extends: .node_job
+  stage: validate
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  script:
+    - pnpm commitlint:test
+    - pnpm commitlint:range --from "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --to "$CI_COMMIT_SHA"
 
 generated_code_check:
   image: ghcr.io/cirruslabs/flutter:3.47.0

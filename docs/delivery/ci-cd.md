@@ -10,6 +10,7 @@
 
 ```text
 validate
+  ├── Conventional Commit messages introduced by the merge request
   ├── Markdown/configuration checks
   ├── Dart and TypeScript formatting
   ├── Flutter analysis and TypeScript type-check
