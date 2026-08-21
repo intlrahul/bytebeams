@@ -2,6 +2,8 @@
 
 Local-first electric fleet operations take-home. Product and engineering decisions live in `context.md` and `docs/`; every implementation request follows the planning workflow in `AGENTS.md`.
 
+Development follows the approved milestone sequence in [`docs/delivery/implementation-plan.md`](docs/delivery/implementation-plan.md). The roadmap establishes order and dependencies; each milestone requires a separately approved implementation plan before code changes begin.
+
 ## Workspace
 
 ```text

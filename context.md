@@ -31,7 +31,7 @@ packages          added only when sharing is justified
 docs              persistent product and engineering context
 ```
 
-The application shells are scaffolded. Do not add product features or infrastructure behavior without a separate approved implementation plan.
+The application shells are scaffolded. The approved delivery sequence is maintained in `docs/delivery/implementation-plan.md`. Each milestone still requires its own planning conversation and explicit implementation approval.
 
 Project identity:
 
@@ -96,4 +96,4 @@ Resolve these during the planning conversation for the relevant implementation:
 
 ## Documentation map
 
-Start with `AGENTS.md`, then read product requirements, the relevant architecture document, engineering policy, and delivery requirements for the task. After planning confirms a responsibility and layer, use the applicable reference in `docs/templates/`. Templates are illustrative and must not create unused layers or placeholder classes.
+Start with `AGENTS.md` and `docs/delivery/implementation-plan.md`, then read product requirements, the relevant architecture document, engineering policy, and delivery requirements for the task. After planning confirms a responsibility and layer, use the applicable reference in `docs/templates/`. Templates are illustrative and must not create unused layers or placeholder classes.
