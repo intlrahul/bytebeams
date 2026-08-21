@@ -130,7 +130,7 @@ android_integration_test:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
   script:
     - test -n "$ANDROID_DEVICE_ID"
-    - flutter test integration_test/app_smoke_test.dart --device-id "$ANDROID_DEVICE_ID"
+    - flutter test integration_test --device-id "$ANDROID_DEVICE_ID"
   artifacts:
     when: always
     paths:

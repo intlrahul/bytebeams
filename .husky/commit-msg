@@ -1,1 +1,10 @@
-pnpm exec commitlint --edit "$1"
+#!/usr/bin/env sh
+
+repository_root="$(git rev-parse --show-toplevel)"
+repository_pnpm="$repository_root/.toolchains/node/bin/pnpm"
+
+if [ -x "$repository_pnpm" ]; then
+  PATH="$repository_root/.toolchains/node/bin:$PATH"
+fi
+
+exec pnpm exec commitlint --edit "$1"

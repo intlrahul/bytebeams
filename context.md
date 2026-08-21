@@ -84,6 +84,7 @@ Project identity:
 - Reconsider Melos when a second Dart/Flutter package exists, shared packages require coordinated commands, or workspace-wide dependency/version management becomes repetitive.
 - Pin upgrades intentionally; never interpret “current stable/LTS” as permission for an automatic version change.
 - Validate `dart_duckdb` persistence and binary support independently on Android, iOS, and web before claiming support. Do not silently replace storage on an unsupported target.
+- **Strict AI execution limit:** do not run Gradle builds, emulator/device workflows, or other long-running scripts/commands. Identify the exact command and expected purpose for the developer to run instead. This limit exists to conserve AI tokens.
 
 ## Open decisions
 

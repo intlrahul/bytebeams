@@ -29,7 +29,7 @@
     "prepare": "husky",
     "test": "pnpm test:server && pnpm test:flutter",
     "test:flutter": "cd apps/mobile && fvm flutter test --coverage --suppress-analytics && fvm dart run ../../tooling/coverage/check_lcov.dart coverage/lcov.info 90",
-    "test:flutter:integration": "cd apps/mobile && fvm flutter test integration_test/app_smoke_test.dart --suppress-analytics",
+    "test:flutter:integration": "cd apps/mobile && fvm flutter test integration_test --suppress-analytics",
     "test:server": "pnpm --filter @bytebeams/fleet test:coverage",
     "typecheck": "pnpm --filter @bytebeams/fleet typecheck"
   },
