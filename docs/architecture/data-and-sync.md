@@ -6,6 +6,23 @@ Every vehicle telemetry packet has a globally unique `packet_id`, `vehicle_id`, 
 
 Location is one atomic structured signal containing latitude, longitude, and reported accuracy. Legitimate packets do not share the same `(vehicle_id, event_timestamp)`; repeated delivery of the same packet is a duplicate.
 
+## Supported signal catalog and validation
+
+Signal names are lowercase snake case. A known signal with the wrong tagged value type or a value outside its range is `supported_invalid`; retain its raw value and validation reason.
+
+| Signal | Tagged value | Valid value and unit |
+| --- | --- | --- |
+| `soc` | number | `0 <= value <= 100`, percent |
+| `range` | number | `value >= 0`, kilometres |
+| `speed` | number | `value >= 0`, kilometres per hour |
+| `battery_temp` | number | `-40 <= value <= 100`, degrees Celsius |
+| `odometer` | number | `value >= 0`, kilometres |
+| `ignition` | boolean | either boolean value |
+| `last_ping` | boolean | must be `true` |
+| `location` | location | `-90 <= latitude <= 90`, `-180 <= longitude <= 180`, `accuracy_meters >= 0` |
+
+Location accuracy above 100 metres is still valid telemetry. It is only excluded later from geofence-transition confirmation.
+
 ## Classification
 
 Persist the raw value and classify every received signal as:
@@ -17,12 +34,19 @@ Persist the raw value and classify every received signal as:
 
 Invalid records retain raw value, validation error, arrival time, packet identity, and event time. Only `supported_valid` records influence latest readings, status, alerts, memberships, or trips.
 
+## Timestamp policy
+
+- Treat packet identifiers and vehicle identifiers as opaque, nonblank strings. Do not trim or normalize them.
+- Accept an event timestamp up to five minutes later than client receipt time. Its displayed age is clamped to zero.
+- Classify an event timestamp more than five minutes after client receipt time as `supported_invalid` with a safe validation reason.
+- Classify an event timestamp earlier than `client_received_at - 30 days` as `quarantined`. Exactly 30 days old remains eligible for normal validation.
+
 ## Ordering and idempotency
 
 - Deduplicate by `packet_id` using a database constraint/upsert strategy.
 - Business calculations use UTC `event_timestamp`.
 - SSE replay uses a separate monotonic server delivery ID.
-- Define stable secondary ordering for impossible/conflicting equal timestamps before implementation; do not rely on insertion order.
+- When records need a deterministic order, sort by `event_timestamp ASC`, then `server_received_at ASC NULLS LAST`, then lexical `packet_id ASC`. Do not rely on insertion order.
 - Keep raw events immutable where practical and derive rebuildable projections.
 
 ## Bootstrap and live sync

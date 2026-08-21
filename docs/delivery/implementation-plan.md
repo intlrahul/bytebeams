@@ -100,7 +100,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 - Raw invalid values and validation errors remain queryable after restart.
 - Equal/conflicting timestamp behavior is documented and deterministic.
 
-**Decisions before implementation:** timestamp-skew tolerance, quarantine thresholds, supported signal value ranges, and stable secondary ordering.
+**Resolved decisions:** validate the approved lowercase signal catalog and units in `data-and-sync.md`; accept future event timestamps up to five minutes and quarantine arrivals more than 30 days old by event time; preserve opaque nonblank identifiers; and order conflicts by event timestamp, server receipt time, then packet ID. Use domain-owned Freezed `Result` and `TelemetryFailure` unions. Implementation plan approval is still required.
 
 ## Milestone 4: deterministic demo backend
 

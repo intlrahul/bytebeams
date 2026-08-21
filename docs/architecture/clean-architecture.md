@@ -37,6 +37,7 @@ Own contracts around Dio, DuckDB access, preferences, secure storage, clock/time
 ## Error handling
 
 - Domain/application boundaries return typed success/failure results.
+- Use the domain-owned Freezed `Result<Success, Failure>` union and a feature-specific failure union, such as `TelemetryFailure`; do not add a result-package dependency.
 - Dio, DuckDB, parsing, SQLite, and storage exceptions do not escape adapters.
 - Programming errors are not silently converted into ordinary user failures.
 - UI failures are actionable and do not reveal stack traces or internals.
