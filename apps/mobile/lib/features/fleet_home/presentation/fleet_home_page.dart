@@ -51,11 +51,16 @@ final class _FleetHomeView extends StatelessWidget {
             body: Column(
               children: [
                 if (state.isSyncing)
-                  const SparkeeInlineNotice(label: 'Syncing fleet updates')
+                  const SparkeeInlineNotice(
+                    label: 'Syncing fleet updates',
+                    isLoading: true,
+                  )
                 else if (state.degradedFailure != null)
                   const SparkeeInlineNotice(
                     label: 'Showing saved fleet data; sync needs attention',
                   ),
+                if (state.demoDataFailure != null)
+                  _DemoDataFallback(isLoading: state.isImportingDemoData),
                 _FleetFilters(counts: snapshot.counts, selected: state.filter),
                 Expanded(
                   child: state.isEmptyFilter
@@ -78,6 +83,32 @@ final class _FleetHomeView extends StatelessWidget {
           );
         },
       );
+}
+
+final class _DemoDataFallback extends StatelessWidget {
+  const _DemoDataFallback({required this.isLoading});
+
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: SparkeeSpacing.md),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SparkeeInlineNotice(
+          label: 'Backend is unavailable. You can load packaged demo data.',
+        ),
+        SparkeePrimaryButton(
+          label: 'Use demo data',
+          isLoading: isLoading,
+          onPressed: () => context.read<FleetHomeBloc>().add(
+            const FleetHomeDemoDataRequested(),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 final class _FleetFilters extends StatelessWidget {

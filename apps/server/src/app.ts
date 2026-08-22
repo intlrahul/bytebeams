@@ -1,8 +1,12 @@
 import express, { type Express } from 'express';
 
 import type { DemoTransportService } from './domain/demo-service.js';
+import { SseConnectionRegistry } from './transport/sse-connection-registry.js';
 
-export function createApp(service?: DemoTransportService): Express {
+export function createApp(
+  service?: DemoTransportService,
+  sseConnections = new SseConnectionRegistry(),
+): Express {
   const app = express();
 
   app.disable('x-powered-by');
@@ -44,7 +48,8 @@ export function createApp(service?: DemoTransportService): Express {
     for (const delivery of service.deliveriesAfter(cursor)) {
       response.write(`id: ${String(delivery.deliveryId)}\ndata: ${JSON.stringify(delivery)}\n\n`);
     }
-    response.end();
+    response.write(': connected\n\n');
+    sseConnections.add(response);
   });
 
   return app;

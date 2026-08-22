@@ -14,7 +14,7 @@ abstract interface class SyncStore {
     required String origin,
   });
   Future<void> replaceBackendData(SyncBootstrapDto bootstrap);
-  Future<void> ingestDelivery(SyncDeliveryDto delivery);
+  Future<void> ingestDeliveries(List<SyncDeliveryDto> deliveries);
 }
 
 final class DuckDbSyncStore implements SyncStore {
@@ -86,14 +86,21 @@ final class DuckDbSyncStore implements SyncStore {
       });
 
   @override
-  Future<void> ingestDelivery(SyncDeliveryDto delivery) =>
+  Future<void> ingestDeliveries(List<SyncDeliveryDto> deliveries) =>
       _database.transaction((transaction) async {
-        await _insertPacket(transaction, delivery.packet);
+        for (final delivery in deliveries) {
+          await _insertPacket(transaction, delivery.packet);
+        }
+        final lastDelivery = deliveries.last;
         await transaction.execute(
           upsertSyncCursor,
-          parameters: [delivery.deliveryId],
+          parameters: [lastDelivery.deliveryId],
         );
       });
+
+  /// Convenience entry point for focused persistence tests and one-off imports.
+  Future<void> ingestDelivery(SyncDeliveryDto delivery) =>
+      ingestDeliveries([delivery]);
 
   Future<void> _insertPacket(
     DatabaseTransaction transaction,

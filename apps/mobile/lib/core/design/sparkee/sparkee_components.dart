@@ -230,9 +230,14 @@ final class SparkeeLoadingState extends StatelessWidget {
 }
 
 final class SparkeeInlineNotice extends StatelessWidget {
-  const SparkeeInlineNotice({required this.label, super.key});
+  const SparkeeInlineNotice({
+    required this.label,
+    this.isLoading = false,
+    super.key,
+  });
 
   final String label;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -240,7 +245,50 @@ final class SparkeeInlineNotice extends StatelessWidget {
     liveRegion: true,
     child: Padding(
       padding: const EdgeInsets.all(SparkeeSpacing.sm),
-      child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+      child: Row(
+        children: [
+          if (isLoading) ...[
+            const SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: SparkeeSpacing.sm),
+          ],
+          Expanded(
+            child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+final class SparkeePrimaryButton extends StatelessWidget {
+  const SparkeePrimaryButton({
+    required this.label,
+    required this.onPressed,
+    this.isLoading = false,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    button: true,
+    child: ElevatedButton(
+      onPressed: isLoading ? null : onPressed,
+      child: isLoading
+          ? const SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(label),
     ),
   );
 }

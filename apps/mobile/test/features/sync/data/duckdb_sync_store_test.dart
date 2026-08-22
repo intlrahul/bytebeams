@@ -145,6 +145,27 @@ void main() {
     expect(database.executions.map((entry) => entry.sql), [upsertSyncCursor]);
   });
 
+  test('given_delivery_batch_when_ingested_then_writes_all_events_and_advances_cursor_once', () async {
+    final database = _Database();
+    final store = _store(database);
+
+    await store.ingestDeliveries([
+      SyncDeliveryDto(deliveryId: '16', packet: _packet('soc', _number(80))),
+      SyncDeliveryDto(deliveryId: '17', packet: _packet('speed', _number(40))),
+    ]);
+
+    expect(database.transactions, 1);
+    expect(
+      database.executions.where((entry) => entry.sql == insertTelemetryEvent),
+      hasLength(2),
+    );
+    final cursorWrites = database.executions
+        .where((entry) => entry.sql == upsertSyncCursor)
+        .toList();
+    expect(cursorWrites, hasLength(1));
+    expect(cursorWrites.single.parameters, ['17']);
+  });
+
   test('given_server_refresh_when_replaced_then_removes_only_backend_data_before_importing_snapshot', () async {
     final database = _Database();
     final store = _store(database);

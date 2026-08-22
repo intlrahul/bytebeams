@@ -9,6 +9,7 @@ import { migrations } from '../src/data/migrations.js';
 import { SqliteDemoRepository } from '../src/data/sqlite-demo-repository.js';
 import { migrate } from '../src/data/sqlite-migrator.js';
 import { createDemoPackets, createDemoVehicles } from '../src/domain/demo-fixtures.js';
+import { DemoService } from '../src/domain/demo-service.js';
 
 describe('sqlite demo repository', () => {
   it('given_seeded_sqlite_when_reopened_then_preserves_delivery_cursor', () => {
@@ -51,6 +52,27 @@ describe('sqlite demo repository', () => {
     const database = new Database(':memory:');
     migrate(database, migrations);
     expect(new SqliteDemoRepository(database).oldestCursor()).toBeNull();
+    database.close();
+  });
+
+  it('given_seeded_sqlite_when_live_delivery_published_then_persists_and_replays_it', () => {
+    const database = new Database(':memory:');
+    migrate(database, migrations);
+    const vehicles = createDemoVehicles('seed', 1);
+    const repository = new SqliteDemoRepository(database);
+    repository.seed(
+      vehicles,
+      createDemoPackets(vehicles, new Date('2026-08-21T00:00:00Z')),
+      '2026-08-21T00:00:00Z',
+    );
+    const service = new DemoService(repository, new Date('2026-08-21T00:00:00Z'));
+    const initialCursor = repository.cursor();
+
+    const delivery = service.publishNextDelivery();
+
+    expect(delivery.deliveryId).toBe(String(Number(initialCursor) + 1));
+    expect(repository.cursor()).toBe(delivery.deliveryId);
+    expect(repository.readAfter(initialCursor)).toHaveLength(1);
     database.close();
   });
 });

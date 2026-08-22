@@ -87,6 +87,9 @@ final class _Repository implements SyncRepository {
   final List<String> log;
 
   @override
+  SyncState get currentState => const SyncState.idle();
+
+  @override
   Stream<SyncState> get states => const Stream.empty();
 
   @override

@@ -23,6 +23,9 @@ final class _Repository implements SyncRepository {
   int synchronizeCalls = 0;
 
   @override
+  SyncState get currentState => const SyncState.idle();
+
+  @override
   Stream<SyncState> get states => const Stream.empty();
 
   @override

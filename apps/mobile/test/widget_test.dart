@@ -68,6 +68,9 @@ final class _SyncRepository implements SyncRepository {
   const _SyncRepository();
 
   @override
+  SyncState get currentState => const SyncState.idle();
+
+  @override
   Stream<SyncState> get states => const Stream.empty();
 
   @override

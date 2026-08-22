@@ -1,3 +1,6 @@
+import { request as httpRequest } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
@@ -15,11 +18,42 @@ describe('demo transport', () => {
     });
   });
   it('given_both_cursors_when_telemetry_requested_then_last_event_id_wins', async () => {
-    const response = await request(createApp(service()))
-      .get('/telemetry?after=1')
-      .set('Last-Event-ID', '2');
-    expect(response.status).toBe(200);
-    expect(response.text).toContain('id: 3');
+    let requestedCursor: string | undefined;
+    const app = createApp({
+      ...service(),
+      deliveriesAfter: (cursor) => {
+        requestedCursor = cursor;
+        return [{ deliveryId: String(Number(cursor) + 1), packet: {} }];
+      },
+    });
+    const server = app.listen(0);
+    const { port } = server.address() as AddressInfo;
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const client = httpRequest(
+          {
+            port,
+            path: '/telemetry?after=1',
+            headers: { 'Last-Event-ID': '2' },
+          },
+          (response) => {
+            response.once('data', (chunk: Buffer) => {
+              expect(chunk.toString()).toContain('id: 3');
+              client.destroy();
+              response.destroy();
+              resolve();
+            });
+          },
+        );
+        client.once('error', reject);
+        client.end();
+      });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+
+    expect(requestedCursor).toBe('2');
   });
   it('given_a_replay_gap_when_telemetry_requested_then_returns_409_contract', async () => {
     const response = await request(
@@ -45,5 +79,6 @@ function service(): DemoTransportService {
     bootstrap: () => ({ vehicles: [], telemetry: [], deliveryCursor: '3' }),
     deliveriesAfter: (cursor) => [{ deliveryId: String(Number(cursor) + 1), packet: {} }],
     replayGap: () => null,
+    publishNextDelivery: () => ({ deliveryId: '4', packet: {} }),
   };
 }

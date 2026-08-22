@@ -11,6 +11,18 @@ Reserve **telemetry** for vehicle signal packets. Application instrumentation is
 
 Initial adapters are `NoOp*` and sanitized `Debug*` implementations. No external vendor or network transmission is approved.
 
+## Console API diagnostics
+
+The app-owned Dio interceptor logs request lifecycle metadata only in debug
+builds: HTTP method, URL path without query parameters, response status,
+duration, and safe Dio error type. Console severity uses ANSI colours (debug
+grey, info cyan, warning yellow, and error red). Release builds use a no-op
+logger.
+
+It never logs request or response bodies, headers, query values, SSE frames,
+vehicle telemetry, identifiers, secrets, or stack traces. The interceptor is
+attached once in the application composition root, not in data sources.
+
 ## Rules
 
 - Provider SDKs remain behind owned adapters.
@@ -22,6 +34,8 @@ Initial adapters are `NoOp*` and sanitized `Debug*` implementations. No external
 - Inject contracts so tests can assert important events without a vendor SDK.
 
 ## Suggested operational coverage
+
+The sync coordinator emits `telemetry.packet.received` after a delivery commits locally. Its only property is the safe `signalName`; it never includes packet or vehicle identifiers, raw values, or payloads. It then emits `fleet.data.committed` with the safe `packetCount` immediately before publishing the payload-free app event that causes DuckDB-backed UI reads to refresh.
 
 When implementation is planned, consider sanitized events for bootstrap outcome, SSE connection/reconnect/replay gap, ingestion classification counts, migration outcome, projection/replay duration, and retention cleanup. Event names and properties require approval with the implementing feature; this list is not permission to add them silently.
 

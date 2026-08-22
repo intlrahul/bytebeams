@@ -1,34 +1,76 @@
 import 'dart:async';
 
+import 'package:bytebeams/core/diagnostics/app_logger.dart';
 import 'package:bytebeams/features/sync/data/demo_data_importer.dart';
 import 'package:bytebeams/features/sync/data/duckdb_sync_store.dart';
 import 'package:bytebeams/features/sync/data/fleet_remote_data_source.dart';
+import 'package:bytebeams/features/sync/data/sync_dto_mapper.dart';
 import 'package:bytebeams/features/sync/domain/app_event_bus.dart';
 import 'package:bytebeams/features/sync/domain/sync_models.dart';
+import 'package:bytebeams/features/sync/domain/sync_batch_scheduler.dart';
 import 'package:bytebeams/features/sync/domain/sync_repository.dart';
 import 'package:bytebeams/features/sync/domain/sync_retry_scheduler.dart';
 
 /// Coordinates local-first bootstrapping. All UI consumers react to the
 /// committed local database through [FleetDataCommitted], never to API data.
 final class FleetSyncCoordinator implements SyncRepository {
-  FleetSyncCoordinator({
+  factory FleetSyncCoordinator({
+    required FleetRemoteDataSource remote,
+    required SyncStore store,
+    required DemoDataImporter demoDataImporter,
+    required AppEventBus eventBus,
+    AppLogger logger = const NoOpAppLogger(),
+    SyncBatchScheduler batchScheduler = const SystemSyncBatchScheduler(),
+    Duration batchWindow = const Duration(seconds: 5),
+    int maximumBatchSize = 100,
+    SyncRetryScheduler retryScheduler = const SystemSyncRetryScheduler(),
+    SyncRetryPolicy retryPolicy = const SyncRetryPolicy(),
+  }) => FleetSyncCoordinator._(
+    remote: remote,
+    store: store,
+    demoDataImporter: demoDataImporter,
+    eventBus: eventBus,
+    logger: logger,
+    batchScheduler: batchScheduler,
+    batchWindow: batchWindow,
+    maximumBatchSize: maximumBatchSize,
+    retryScheduler: retryScheduler,
+    retryPolicy: retryPolicy,
+  );
+
+  FleetSyncCoordinator._({
     required this._remote,
     required this._store,
     required this._demoDataImporter,
     required this._eventBus,
-    this._retryScheduler = const SystemSyncRetryScheduler(),
-    this._retryPolicy = const SyncRetryPolicy(),
+    required this._logger,
+    required this._batchScheduler,
+    required this._batchWindow,
+    required this._maximumBatchSize,
+    required this._retryScheduler,
+    required this._retryPolicy,
   });
 
   final FleetRemoteDataSource _remote;
   final SyncStore _store;
   final DemoDataImporter _demoDataImporter;
   final AppEventBus _eventBus;
+  final AppLogger _logger;
+  final SyncBatchScheduler _batchScheduler;
+  final Duration _batchWindow;
+  final int _maximumBatchSize;
   final SyncRetryScheduler _retryScheduler;
   final SyncRetryPolicy _retryPolicy;
   final StreamController<SyncState> _states =
       StreamController<SyncState>.broadcast();
+  SyncState _currentState = const SyncState.idle();
+  final List<SyncDeliveryDto> _pendingDeliveries = [];
+  Future<void> _flushChain = Future<void>.value();
+  SyncBatchTimer? _batchTimer;
   bool _closed = false;
+
+  @override
+  SyncState get currentState => _currentState;
 
   @override
   Stream<SyncState> get states => _states.stream;
@@ -95,9 +137,12 @@ final class FleetSyncCoordinator implements SyncRepository {
       try {
         final cursor = await _store.deliveryCursor();
         await for (final delivery in _remote.deliveries(after: cursor)) {
-          await _store.ingestDelivery(delivery);
-          _committed();
+          if (_closed) {
+            return;
+          }
+          await _enqueue(delivery);
         }
+        await _requestFlush();
         throw const SyncTransportUnavailable();
       } on SyncReplayGap catch (failure) {
         _emit(SyncState.degraded(failure));
@@ -113,10 +158,63 @@ final class FleetSyncCoordinator implements SyncRepository {
     }
   }
 
-  void _committed() => _eventBus.publish(const FleetDataCommitted());
+  Future<void> _enqueue(SyncDeliveryDto delivery) {
+    _pendingDeliveries.add(delivery);
+    if (_pendingDeliveries.length >= _maximumBatchSize) {
+      return _requestFlush();
+    }
+    _batchTimer ??= _batchScheduler.schedule(_batchWindow, () {
+      _batchTimer = null;
+      unawaited(_requestFlush());
+    });
+    return Future<void>.value();
+  }
+
+  Future<void> _requestFlush() {
+    _batchTimer?.cancel();
+    _batchTimer = null;
+    _flushChain = _flushChain.then((_) => _flushPending());
+    return _flushChain;
+  }
+
+  Future<void> _flushPending() async {
+    if (_pendingDeliveries.isEmpty) {
+      return;
+    }
+    final batch = List<SyncDeliveryDto>.of(_pendingDeliveries);
+    _pendingDeliveries.clear();
+    try {
+      await _store.ingestDeliveries(batch);
+      for (final delivery in batch) {
+        _logger.info(
+          'telemetry.packet.received',
+          fields: {'signalName': delivery.packet.signalName},
+        );
+      }
+      _committed(packetCount: batch.length);
+    } on Object {
+      _pendingDeliveries.insertAll(0, batch);
+      _emit(const SyncState.degraded(SyncPersistenceUnavailable()));
+      if (!_closed) {
+        _batchTimer ??= _batchScheduler.schedule(_batchWindow, () {
+          _batchTimer = null;
+          unawaited(_requestFlush());
+        });
+      }
+    }
+  }
+
+  void _committed({int? packetCount}) {
+    _logger.info(
+      'fleet.data.committed',
+      fields: packetCount == null ? const {} : {'packetCount': packetCount},
+    );
+    _eventBus.publish(const FleetDataCommitted());
+  }
 
   void _emit(SyncState state) {
     if (!_closed) {
+      _currentState = state;
       _states.add(state);
     }
   }
@@ -124,6 +222,9 @@ final class FleetSyncCoordinator implements SyncRepository {
   @override
   Future<void> close() async {
     _closed = true;
+    _batchTimer?.cancel();
+    _batchTimer = null;
+    await _requestFlush();
     await _states.close();
   }
 }

@@ -5,6 +5,7 @@ import 'package:bytebeams/features/fleet_home/domain/get_fleet_home.dart';
 import 'package:bytebeams/features/sync/domain/app_event_bus.dart';
 import 'package:bytebeams/features/sync/domain/sync_models.dart';
 import 'package:bytebeams/features/sync/domain/sync_repository.dart';
+import 'package:bytebeams/features/sync/domain/use_demo_data.dart';
 import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -32,13 +33,19 @@ final class FleetHomeSyncStateChanged extends FleetHomeEvent {
   final SyncState syncState;
 }
 
+final class FleetHomeDemoDataRequested extends FleetHomeEvent {
+  const FleetHomeDemoDataRequested();
+}
+
 final class FleetHomeState {
   const FleetHomeState({
     this.snapshot,
     this.filter = FleetFilter.all,
     this.isLoading = false,
     this.isSyncing = false,
+    this.isImportingDemoData = false,
     this.degradedFailure,
+    this.demoDataFailure,
     this.failure,
   });
 
@@ -46,7 +53,9 @@ final class FleetHomeState {
   final FleetFilter filter;
   final bool isLoading;
   final bool isSyncing;
+  final bool isImportingDemoData;
   final SyncFailure? degradedFailure;
+  final SyncFailure? demoDataFailure;
   final FleetHomeFailure? failure;
 
   bool get hasRows => snapshot?.rows.isNotEmpty ?? false;
@@ -57,18 +66,25 @@ final class FleetHomeState {
     FleetFilter? filter,
     bool? isLoading,
     bool? isSyncing,
+    bool? isImportingDemoData,
     SyncFailure? degradedFailure,
+    SyncFailure? demoDataFailure,
     FleetHomeFailure? failure,
     bool clearDegradedFailure = false,
+    bool clearDemoDataFailure = false,
     bool clearFailure = false,
   }) => FleetHomeState(
     snapshot: snapshot ?? this.snapshot,
     filter: filter ?? this.filter,
     isLoading: isLoading ?? this.isLoading,
     isSyncing: isSyncing ?? this.isSyncing,
+    isImportingDemoData: isImportingDemoData ?? this.isImportingDemoData,
     degradedFailure: clearDegradedFailure
         ? null
         : (degradedFailure ?? this.degradedFailure),
+    demoDataFailure: clearDemoDataFailure
+        ? null
+        : (demoDataFailure ?? this.demoDataFailure),
     failure: clearFailure ? null : (failure ?? this.failure),
   );
 }
@@ -76,13 +92,16 @@ final class FleetHomeState {
 final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
   FleetHomeBloc({
     required this.getFleetHome,
+    UseDemoData? useDemoData,
     required AppEventBus eventBus,
     required SyncRepository syncRepository,
-  }) : super(const FleetHomeState()) {
+  }) : useDemoData = useDemoData ?? UseDemoData(repository: syncRepository),
+       super(const FleetHomeState()) {
     on<FleetHomeStarted>(_onRefresh);
     on<FleetHomeFilterSelected>(_onFilterSelected);
     on<FleetHomeDataCommitted>(_onRefresh);
     on<FleetHomeSyncStateChanged>(_onSyncStateChanged);
+    on<FleetHomeDemoDataRequested>(_onDemoDataRequested);
     _eventSubscription = eventBus.events
         .where((event) => event is FleetDataCommitted)
         .cast<FleetDataCommitted>()
@@ -90,9 +109,11 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
     _syncSubscription = syncRepository.states.listen(
       (syncState) => add(FleetHomeSyncStateChanged(syncState)),
     );
+    add(FleetHomeSyncStateChanged(syncRepository.currentState));
   }
 
   final GetFleetHome getFleetHome;
+  final UseDemoData useDemoData;
   late final StreamSubscription<FleetDataCommitted> _eventSubscription;
   late final StreamSubscription<SyncState> _syncSubscription;
 
@@ -146,14 +167,52 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
   ) {
     switch (event.syncState) {
       case SyncSyncing():
-        emit(state.copyWith(isSyncing: true, clearDegradedFailure: true));
+        emit(
+          state.copyWith(
+            isSyncing: true,
+            clearDegradedFailure: true,
+            clearDemoDataFailure: true,
+          ),
+        );
       case SyncDegraded(failure: final failure):
-        emit(state.copyWith(isSyncing: false, degradedFailure: failure));
+        emit(
+          state.copyWith(
+            isSyncing: false,
+            isImportingDemoData: false,
+            degradedFailure: failure,
+            clearDemoDataFailure: true,
+          ),
+        );
       case SyncDemoDataAvailable(failure: final failure):
-        emit(state.copyWith(isSyncing: false, degradedFailure: failure));
+        emit(
+          state.copyWith(
+            isSyncing: false,
+            isImportingDemoData: false,
+            demoDataFailure: failure,
+            clearDegradedFailure: true,
+          ),
+        );
       case SyncIdle():
-        emit(state.copyWith(isSyncing: false, clearDegradedFailure: true));
+        emit(
+          state.copyWith(
+            isSyncing: false,
+            isImportingDemoData: false,
+            clearDegradedFailure: true,
+            clearDemoDataFailure: true,
+          ),
+        );
     }
+  }
+
+  Future<void> _onDemoDataRequested(
+    FleetHomeDemoDataRequested event,
+    Emitter<FleetHomeState> emit,
+  ) async {
+    if (state.demoDataFailure == null || state.isImportingDemoData) {
+      return;
+    }
+    emit(state.copyWith(isImportingDemoData: true));
+    await useDemoData();
   }
 
   @override

@@ -68,6 +68,36 @@ export class SqliteDemoRepository {
       .all(Number(cursor)) as readonly Record<string, unknown>[];
   }
 
+  appendPacket(packet: DemoPacket, nowUtc: string): Readonly<Record<string, unknown>> {
+    const write = this.database.transaction(() => {
+      this.database
+        .prepare(
+          'INSERT INTO telemetry_packets (packet_id, vehicle_id, event_timestamp, signal_name, value_json, server_received_at) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          packet.packetId,
+          packet.vehicleId,
+          packet.eventTimestamp,
+          packet.signalName,
+          JSON.stringify(packet.value),
+          nowUtc,
+        );
+      const result = this.database
+        .prepare('INSERT INTO delivery_log (packet_id, created_at) VALUES (?, ?)')
+        .run(packet.packetId, nowUtc);
+      return this.database
+        .prepare(
+          'SELECT d.delivery_id AS deliveryId, t.packet_id AS packetId, t.vehicle_id AS vehicleId, t.event_timestamp AS eventTimestamp, t.signal_name AS signalName, t.value_json AS valueJson, t.server_received_at AS serverReceivedAt FROM delivery_log d JOIN telemetry_packets t ON t.packet_id = d.packet_id WHERE d.delivery_id = ?',
+        )
+        .get(result.lastInsertRowid) as Record<string, unknown> | undefined;
+    });
+    const delivery = write();
+    if (delivery === undefined) {
+      throw new Error('Newly persisted demo delivery could not be read');
+    }
+    return delivery;
+  }
+
   oldestCursor(): string | null {
     const row = this.database
       .prepare('SELECT MIN(delivery_id) AS cursor FROM delivery_log')

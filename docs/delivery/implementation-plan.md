@@ -190,7 +190,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 **Decisions before implementation:** fleet-row visual design, database query observation strategy if still open, and approved accessibility target.
 
-**Validation evidence:** Flutter analysis, formatting validation, and the Flutter unit suite passed with the configured 90% line-coverage gate. Android integration tests passed. Fleet Home tests cover SQL-query contracts and repository mapping, filter/status rules, BLoC refresh/failure/sync transitions, Sparkee accessibility primitives, widget states, routing, and the Android application smoke flow.
+**Validation evidence:** Flutter analysis, formatting validation, and the Flutter unit suite passed with the configured 95.52% line-coverage gate. Android integration tests passed. Fleet Home tests cover SQL-query contracts and repository mapping, filter/status rules, BLoC refresh/failure/sync transitions, Sparkee accessibility primitives, widget states, routing, and the Android application smoke flow.
 
 ## Milestone 7: vehicle detail vertical slice
 

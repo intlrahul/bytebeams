@@ -54,6 +54,8 @@ final class _Repository implements SyncRepository {
   _Repository(this.log);
   final List<String> log;
   @override
+  SyncState get currentState => const SyncState.idle();
+  @override
   Stream<SyncState> get states => const Stream.empty();
   @override
   Future<void> close() async {}

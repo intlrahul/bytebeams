@@ -81,6 +81,29 @@ void main() {
   });
 
   testWidgets(
+    'given_fresh_install_sync_failure_when_home_rendered_then_offers_demo_data',
+    (tester) async {
+      final events = AsyncAppEventBus();
+      final sync = _SyncRepository();
+      await tester.pumpWidget(
+        _app(events: events, sync: sync, repository: const _EmptyRepository()),
+      );
+      sync.emit(
+        const SyncState.demoDataAvailable(SyncFailure.bootstrapUnavailable()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Use demo data'), findsOneWidget);
+      await tester.tap(find.text('Use demo data'));
+      await tester.pump();
+      expect(sync.useDemoDataCalls, 1);
+
+      await events.close();
+      await sync.close();
+    },
+  );
+
+  testWidgets(
     'given_read_failure_when_home_rendered_then_shows_failure_state',
     (tester) async {
       final events = AsyncAppEventBus();
@@ -217,9 +240,19 @@ final class _FailingRepository implements FleetHomeRepository {
 
 final class _SyncRepository implements SyncRepository {
   final _states = StreamController<SyncState>.broadcast();
+  SyncState _currentState = const SyncState.idle();
+  var useDemoDataCalls = 0;
+
+  @override
+  SyncState get currentState => _currentState;
 
   @override
   Stream<SyncState> get states => _states.stream;
+
+  void emit(SyncState state) {
+    _currentState = state;
+    _states.add(state);
+  }
 
   @override
   Future<void> close() => _states.close();
@@ -231,5 +264,7 @@ final class _SyncRepository implements SyncRepository {
   Future<void> synchronize() async {}
 
   @override
-  Future<void> useDemoData() async {}
+  Future<void> useDemoData() async {
+    useDemoDataCalls += 1;
+  }
 }

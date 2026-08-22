@@ -132,16 +132,53 @@ void main() {
       );
 
       sync.emit(const SyncState.syncing());
-      expect((await bloc.stream.first).isSyncing, isTrue);
+      final syncing = await bloc.stream.firstWhere((state) => state.isSyncing);
+      expect(syncing.isSyncing, isTrue);
       sync.emit(
         const SyncState.demoDataAvailable(SyncFailure.bootstrapUnavailable()),
       );
-      expect((await bloc.stream.first).degradedFailure, isNotNull);
+      final demoDataAvailable = await bloc.stream.firstWhere(
+        (state) => state.demoDataFailure != null,
+      );
+      expect(demoDataAvailable.demoDataFailure, isNotNull);
       sync.emit(const SyncState.idle());
-      final idle = await bloc.stream.first;
+      final idle = await bloc.stream.firstWhere(
+        (state) =>
+            !state.isSyncing &&
+            state.degradedFailure == null &&
+            state.demoDataFailure == null,
+      );
 
       expect(idle.isSyncing, isFalse);
       expect(idle.degradedFailure, isNull);
+      await bloc.close();
+      await events.close();
+      await sync.close();
+    },
+  );
+
+  test(
+    'given_demo_data_available_when_requested_then_invokes_explicit_import',
+    () async {
+      final events = AsyncAppEventBus();
+      final sync = _SyncRepository();
+      final bloc = FleetHomeBloc(
+        getFleetHome: GetFleetHome(
+          repository: _Repository(),
+          clock: const _Clock(),
+        ),
+        eventBus: events,
+        syncRepository: sync,
+      );
+
+      sync.emit(
+        const SyncState.demoDataAvailable(SyncFailure.bootstrapUnavailable()),
+      );
+      await bloc.stream.firstWhere((state) => state.demoDataFailure != null);
+      bloc.add(const FleetHomeDemoDataRequested());
+      await bloc.stream.firstWhere((state) => state.isImportingDemoData);
+
+      expect(sync.useDemoDataCalls, 1);
       await bloc.close();
       await events.close();
       await sync.close();
@@ -199,11 +236,19 @@ final class _Repository implements FleetHomeRepository {
 
 final class _SyncRepository implements SyncRepository {
   final _states = StreamController<SyncState>.broadcast();
+  SyncState _currentState = const SyncState.idle();
+  var useDemoDataCalls = 0;
+
+  @override
+  SyncState get currentState => _currentState;
 
   @override
   Stream<SyncState> get states => _states.stream;
 
-  void emit(SyncState state) => _states.add(state);
+  void emit(SyncState state) {
+    _currentState = state;
+    _states.add(state);
+  }
 
   @override
   Future<void> close() => _states.close();
@@ -215,5 +260,7 @@ final class _SyncRepository implements SyncRepository {
   Future<void> synchronize() async {}
 
   @override
-  Future<void> useDemoData() async {}
+  Future<void> useDemoData() async {
+    useDemoDataCalls += 1;
+  }
 }

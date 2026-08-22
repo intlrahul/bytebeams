@@ -1,6 +1,9 @@
 import 'package:bytebeams/features/sync/domain/sync_models.dart';
 
 abstract interface class SyncRepository {
+  /// The most recently emitted state, retained for late UI subscribers.
+  SyncState get currentState;
+
   Stream<SyncState> get states;
 
   Future<void> synchronize();

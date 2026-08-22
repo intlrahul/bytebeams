@@ -4,6 +4,7 @@ import 'package:bytebeams/features/fleet_home/data/duckdb_fleet_home_repository.
 import 'package:bytebeams/features/fleet_home/domain/fleet_home_repository.dart';
 import 'package:bytebeams/features/fleet_home/domain/get_fleet_home.dart';
 import 'package:bytebeams/features/fleet_home/presentation/fleet_home_bloc.dart';
+import 'package:bytebeams/features/sync/domain/use_demo_data.dart';
 import 'package:get_it/get_it.dart';
 
 /// Composition-root-only service registration for application adapters.
@@ -20,9 +21,11 @@ final class AppDependencies {
           clock: const SystemClock(),
         ),
       )
+      ..registerSingleton(UseDemoData(repository: runtime.syncRepository))
       ..registerFactory(
         () => FleetHomeBloc(
           getFleetHome: _services<GetFleetHome>(),
+          useDemoData: _services<UseDemoData>(),
           eventBus: runtime.eventBus,
           syncRepository: runtime.syncRepository,
         ),
