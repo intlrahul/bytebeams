@@ -28,7 +28,8 @@ void main() {
       driver.connection.executedSql,
       contains(
         predicate<String>(
-          (sql) => sql.startsWith('CREATE TABLE IF NOT EXISTS schema_migrations'),
+          (sql) =>
+              sql.startsWith('CREATE TABLE IF NOT EXISTS schema_migrations'),
         ),
       ),
     );

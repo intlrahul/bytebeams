@@ -15,9 +15,7 @@ final class SseFrameParser {
 
   Stream<SseFrame> parse(Stream<List<int>> bytes) async* {
     var buffer = '';
-    await for (final chunk in bytes
-        .cast<List<int>>()
-        .transform(utf8.decoder)) {
+    await for (final chunk in bytes.cast<List<int>>().transform(utf8.decoder)) {
       buffer += chunk.replaceAll('\r\n', '\n');
       while (true) {
         final boundary = buffer.indexOf('\n\n');

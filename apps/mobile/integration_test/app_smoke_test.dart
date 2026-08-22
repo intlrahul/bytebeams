@@ -5,15 +5,14 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets(
-    'given_app_installed_when_launched_then_renders_the_product_name',
-    (tester) async {
-      // Given / When
-      await app.main();
-      await tester.pumpAndSettle();
+  testWidgets('given_app_installed_when_launched_then_renders_fleet_home', (
+    tester,
+  ) async {
+    // Given / When
+    await app.main();
+    await tester.pumpAndSettle();
 
-      // Then
-      expect(find.text('ByteBeams'), findsOneWidget);
-    },
-  );
+    // Then
+    expect(find.text('Fleet'), findsOneWidget);
+  });
 }

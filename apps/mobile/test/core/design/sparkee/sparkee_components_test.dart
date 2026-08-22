@@ -74,10 +74,7 @@ void main() {
             await tester.pumpWidget(_app(SparkeeAlertBadge(count: count)));
 
             expect(find.text(count.toString()), findsOneWidget);
-            expect(
-              _hasSemanticsLabel(tester, '$count active alerts'),
-              isTrue,
-            );
+            expect(_hasSemanticsLabel(tester, '$count active alerts'), isTrue);
           } finally {
             semantics.dispose();
           }
@@ -165,6 +162,117 @@ void main() {
 
         expect(find.text('Fleet home'), findsOneWidget);
         expect(find.text('Fleet body'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'given_fleet_components_when_rendered_then_expose_operational_content',
+      (tester) async {
+        await tester.pumpWidget(
+          _app(
+            Column(
+              children: [
+                SparkeeFilterChip(
+                  label: 'Moving',
+                  count: 3,
+                  selected: true,
+                  onSelected: (_) {},
+                ),
+                const SparkeeFleetRowCard(
+                  registrationNumber: 'BB-001',
+                  model: 'E-Truck',
+                  status: SparkeeFleetStatus.moving,
+                  soc: '78',
+                  rangeKm: '242',
+                  attentionCount: 1,
+                ),
+              ],
+            ),
+          ),
+        );
+
+        expect(find.text('Moving (3)'), findsOneWidget);
+        expect(find.text('BB-001'), findsOneWidget);
+        expect(find.text('E-Truck'), findsOneWidget);
+        expect(find.text('78 %'), findsOneWidget);
+        expect(find.text('242 km'), findsOneWidget);
+      },
+    );
+
+    for (final status in SparkeeFleetStatus.values) {
+      testWidgets(
+        'given_${status.name}_fleet_state_when_rendered_then_exposes_text_and_icon',
+        (tester) async {
+          await tester.pumpWidget(_app(SparkeeFleetStatusChip(status: status)));
+
+          expect(find.text(status.label), findsOneWidget);
+          expect(find.byIcon(status.icon), findsOneWidget);
+        },
+      );
+    }
+
+    testWidgets(
+      'given_unselected_filter_when_rendered_then_exposes_filter_semantics',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        try {
+          await tester.pumpWidget(
+            _app(
+              SparkeeFilterChip(
+                label: 'Offline',
+                count: 4,
+                selected: false,
+                onSelected: (_) {},
+              ),
+            ),
+          );
+
+          expect(find.text('Offline (4)'), findsOneWidget);
+          expect(
+            _hasSemanticsLabel(tester, 'Offline filter, 4 vehicles'),
+            isTrue,
+          );
+        } finally {
+          semantics.dispose();
+        }
+      },
+    );
+
+    testWidgets(
+      'given_zero_attention_when_fleet_row_rendered_then_hides_badge',
+      (tester) async {
+        await tester.pumpWidget(
+          _app(
+            const SparkeeFleetRowCard(
+              registrationNumber: 'BB-002',
+              model: 'E-Truck',
+              status: SparkeeFleetStatus.stopped,
+              soc: '—',
+              rangeKm: '12.5',
+              attentionCount: 0,
+            ),
+          ),
+        );
+
+        expect(find.text('— %'), findsOneWidget);
+        expect(find.text('12.5 km'), findsOneWidget);
+        expect(find.byType(SparkeeAlertBadge), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'given_inline_notice_when_rendered_then_announces_live_update',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        try {
+          await tester.pumpWidget(
+            _app(const SparkeeInlineNotice(label: 'Syncing fleet updates')),
+          );
+
+          expect(_hasSemanticsLabel(tester, 'Syncing fleet updates'), isTrue);
+        } finally {
+          semantics.dispose();
+        }
       },
     );
   });

@@ -44,6 +44,130 @@ final class SparkeeStatusChip extends StatelessWidget {
   }
 }
 
+final class SparkeeFleetStatusChip extends StatelessWidget {
+  const SparkeeFleetStatusChip({required this.status, super.key});
+
+  final SparkeeFleetStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      SparkeeFleetStatus.moving => SparkeeColors.primary,
+      SparkeeFleetStatus.idle => SparkeeColors.warning,
+      SparkeeFleetStatus.stopped => SparkeeColors.textSecondary,
+      SparkeeFleetStatus.offline => SparkeeColors.offline,
+    };
+    return Semantics(
+      label: 'Vehicle state: ${status.label}',
+      child: Chip(
+        avatar: Icon(status.icon, color: color, size: 18),
+        label: Text(status.label),
+        labelStyle: TextStyle(color: color),
+        backgroundColor: SparkeeColors.surfaceSubtle,
+      ),
+    );
+  }
+}
+
+final class SparkeeFilterChip extends StatelessWidget {
+  const SparkeeFilterChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onSelected,
+    super.key,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '$label filter, $count vehicles',
+    button: true,
+    selected: selected,
+    child: FilterChip(
+      label: Text('$label ($count)'),
+      selected: selected,
+      onSelected: onSelected,
+    ),
+  );
+}
+
+final class SparkeeFleetRowCard extends StatelessWidget {
+  const SparkeeFleetRowCard({
+    required this.registrationNumber,
+    required this.model,
+    required this.status,
+    required this.soc,
+    required this.rangeKm,
+    required this.attentionCount,
+    super.key,
+  });
+
+  final String registrationNumber;
+  final String model;
+  final SparkeeFleetStatus status;
+  final String soc;
+  final String rangeKm;
+  final int attentionCount;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label:
+        '$registrationNumber, $model, ${status.label}, battery $soc, range $rangeKm',
+    child: Card(
+      child: Padding(
+        padding: const EdgeInsets.all(SparkeeSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        registrationNumber,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        model,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                SparkeeFleetStatusChip(status: status),
+              ],
+            ),
+            const SizedBox(height: SparkeeSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: SparkeeMetric(label: 'SOC', value: soc, unit: '%'),
+                ),
+                Expanded(
+                  child: SparkeeMetric(
+                    label: 'Range',
+                    value: rangeKm,
+                    unit: 'km',
+                  ),
+                ),
+                if (attentionCount > 0)
+                  SparkeeAlertBadge(count: attentionCount),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 final class SparkeeAlertBadge extends StatelessWidget {
   const SparkeeAlertBadge({required this.count, super.key});
   final int count;
@@ -102,6 +226,22 @@ final class SparkeeLoadingState extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     label: label,
     child: const Center(child: CircularProgressIndicator()),
+  );
+}
+
+final class SparkeeInlineNotice extends StatelessWidget {
+  const SparkeeInlineNotice({required this.label, super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    liveRegion: true,
+    child: Padding(
+      padding: const EdgeInsets.all(SparkeeSpacing.sm),
+      child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+    ),
   );
 }
 

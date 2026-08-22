@@ -49,24 +49,29 @@ void main() {
     );
   });
 
-  test('given_sse_delivery_when_streamed_then_sends_cursor_and_maps_delivery', () async {
-    final adapter = _Adapter(
-      (_) => ResponseBody.fromString(
-        _sseDelivery,
-        200,
-        headers: const {'content-type': ['text/event-stream']},
-      ),
-    );
-    final dataSource = _dataSource(adapter);
+  test(
+    'given_sse_delivery_when_streamed_then_sends_cursor_and_maps_delivery',
+    () async {
+      final adapter = _Adapter(
+        (_) => ResponseBody.fromString(
+          _sseDelivery,
+          200,
+          headers: const {
+            'content-type': ['text/event-stream'],
+          },
+        ),
+      );
+      final dataSource = _dataSource(adapter);
 
-    final deliveries = await dataSource.deliveries(after: '42').toList();
+      final deliveries = await dataSource.deliveries(after: '42').toList();
 
-    expect(deliveries.single.deliveryId, '43');
-    expect(deliveries.single.packet.packetId, 'packet-1');
-    final request = adapter.requests.single;
-    expect(request.queryParameters['after'], '42');
-    expect(request.headers['Last-Event-ID'], '42');
-  });
+      expect(deliveries.single.deliveryId, '43');
+      expect(deliveries.single.packet.packetId, 'packet-1');
+      final request = adapter.requests.single;
+      expect(request.queryParameters['after'], '42');
+      expect(request.headers['Last-Event-ID'], '42');
+    },
+  );
 
   test(
     'given_replay_gap_response_when_streamed_then_returns_typed_gap',
@@ -117,7 +122,9 @@ ResponseBody _jsonResponse(Map<String, Object?> json, {int statusCode = 200}) =>
     ResponseBody.fromString(
       jsonEncode(json),
       statusCode,
-      headers: const {'content-type': ['application/json']},
+      headers: const {
+        'content-type': ['application/json'],
+      },
     );
 
 final class _EndpointProvider implements ApiEndpointProvider {

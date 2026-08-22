@@ -159,7 +159,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 5.5: Sparkee Design System Foundation
 
-**Status:** `IN PROGRESS`
+**Status:** `COMPLETE`
 
 **Goal:** Establish the mandatory light-only Sparkee design system before product UI work.
 
@@ -169,7 +169,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 6: fleet home vertical slice
 
-**Status:** `NOT STARTED`
+**Status:** `COMPLETE`
 
 **Goal:** Deliver the primary fleet-operator screen entirely from DuckDB-backed queries.
 
@@ -189,6 +189,8 @@ Update status only when repository evidence supports it. A milestone is not comp
 - Unit, SQL integration, BLoC, widget, and Android flow tests pass.
 
 **Decisions before implementation:** fleet-row visual design, database query observation strategy if still open, and approved accessibility target.
+
+**Validation evidence:** Flutter analysis, formatting validation, and the Flutter unit suite passed with the configured 90% line-coverage gate. Android integration tests passed. Fleet Home tests cover SQL-query contracts and repository mapping, filter/status rules, BLoC refresh/failure/sync transitions, Sparkee accessibility primitives, widget states, routing, and the Android application smoke flow.
 
 ## Milestone 7: vehicle detail vertical slice
 
