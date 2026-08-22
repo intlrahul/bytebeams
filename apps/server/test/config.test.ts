@@ -11,7 +11,7 @@ describe('readServerConfig', () => {
     const config = readServerConfig(environment);
 
     // Then
-    expect(config).toEqual({ port: 3000 });
+    expect(config.port).toBe(3000);
   });
 
   it('given_invalid_port_when_config_read_then_throws_validation_error', () => {
@@ -20,5 +20,18 @@ describe('readServerConfig', () => {
 
     // When / Then
     expect(() => readServerConfig(environment)).toThrow();
+  });
+
+  it('given_no_demo_controls_when_config_read_then_uses_approved_defaults', () => {
+    expect(readServerConfig({})).toMatchObject({
+      databasePath: '.data/bytebeams-demo.sqlite',
+      demoClockMode: 'scripted',
+      demoSeed: 'bytebeams-demo-v1',
+      simulationIntervalMs: 1000,
+    });
+  });
+
+  it('given_non_scripted_clock_when_config_read_then_rejects_it', () => {
+    expect(() => readServerConfig({ DEMO_CLOCK_MODE: 'wall' })).toThrow();
   });
 });

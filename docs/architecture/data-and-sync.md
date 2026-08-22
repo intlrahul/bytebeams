@@ -98,3 +98,5 @@ Cleanup must not race an unfinished replay. Process eligible events and preserve
 ## Demo backend
 
 The TypeScript backend stores a small, bounded SQLite delivery log, survives restart, and produces deterministic fixtures for normal, delayed, out-of-order, duplicate, missing-interval, and backlog behavior. It is transport, not fleet truth.
+
+The demo uses seed `bytebeams-demo-v1`, a scripted UTC start time, exactly 500 vehicles, and a 24-hour bootstrap backfill. Retain the newest 10,000 deliveries and no delivery older than seven days. `Last-Event-ID` takes precedence over the `after` query parameter. A cursor before the retained window receives HTTP 409 with `replay_gap`, the requested cursor, and the oldest available cursor.

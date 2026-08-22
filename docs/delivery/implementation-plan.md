@@ -106,7 +106,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 4: deterministic demo backend
 
-**Status:** `NOT STARTED`
+**Status:** `COMPLETE`
 
 **Goal:** Supply reproducible registry, bootstrap, and live telemetry transport for the local-first client.
 
@@ -126,7 +126,9 @@ Update status only when repository evidence supports it. A milestone is not comp
 - API, SQLite migration, SSE reconnect, replay-gap, and contract tests pass.
 - The backend is documented as demo transport, not mobile fleet truth.
 
-**Decisions before implementation:** delivery-log age/size bound, simulator seed/clock controls, replay-gap response, and bootstrap fixture size.
+**Resolved decisions:** use SQLite at the configured demo path; retain at most 10,000 deliveries and seven days; use seed `bytebeams-demo-v1` with a scripted start time and one-second cadence; return the existing HTTP 409 `replay_gap` contract; and bootstrap exactly 500 vehicles with 24 hours of history. Validation evidence is required before completion.
+
+**Validation evidence:** server formatting, linting, type checking, coverage tests, build, OpenAPI lint, and generated-code freshness all passed.
 
 ## Milestone 5: mobile ingestion and synchronization
 
