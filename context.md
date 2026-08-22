@@ -58,6 +58,17 @@ Project identity:
 - Repository-owned `analysis_options.yaml` beginning with `flutter_lints`.
 - No Melos initially.
 
+## UI design system
+
+- **Sparkee** is the application design system. Its source lives under the
+  mobile app and owns the light-theme visual language for this demo.
+- All application UI components, colours, spacing, radii, semantic status
+  treatment, and typography must come from Sparkee. Screens must not introduce
+  ad-hoc styling or typography outside that system.
+- The visual direction is a subtle blue operational theme with accessible
+  semantic status colours.
+- Light theme is required. Dark theme is explicitly out of scope.
+
 ## Sources of truth and ownership
 
 - The backend supplies the vehicle registry, bootstrap telemetry, and simulated live telemetry.

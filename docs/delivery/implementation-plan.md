@@ -157,6 +157,16 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 **Validation evidence:** Flutter analysis passed. The Flutter unit suite passed with its configured 90% line-coverage gate. The suite includes deterministic HTTP/SSE transport, transactional DuckDB-store, replay-gap, retry, local-first startup, and durable duplicate-delivery behavior tests. Android integration coverage was added for persisted delivery cursor and deduplication.
 
+## Milestone 5.5: Sparkee Design System Foundation
+
+**Status:** `IN PROGRESS`
+
+**Goal:** Establish the mandatory light-only Sparkee design system before product UI work.
+
+**Scope:** semantic subtle-blue tokens, typography, Material 3 light theme, reusable operational primitives, accessibility contracts, and an internal component catalogue.
+
+**Acceptance criteria:** all product UI consumes Sparkee tokens/components; status has text/icon semantics in addition to colour; light theme is complete and dark theme remains out of scope; component widget tests pass.
+
 ## Milestone 6: fleet home vertical slice
 
 **Status:** `NOT STARTED`

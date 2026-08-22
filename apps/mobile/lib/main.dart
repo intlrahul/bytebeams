@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:bytebeams/app_runtime.dart';
+import 'package:bytebeams/core/design/sparkee/sparkee_catalogue_page.dart';
+import 'package:bytebeams/core/design/sparkee/sparkee_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -34,10 +36,8 @@ final class ByteBeamsApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ByteBeams',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-      ),
-      home: const Scaffold(body: Center(child: Text('ByteBeams'))),
+      theme: SparkeeTheme.light(),
+      home: const SparkeeCataloguePage(),
     );
   }
 }
