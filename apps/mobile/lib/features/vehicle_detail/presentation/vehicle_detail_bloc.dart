@@ -45,7 +45,7 @@ final class VehicleDetailBloc
     required AppEventBus eventBus,
   }) : super(const VehicleDetailState()) {
     on<VehicleDetailStarted>(_onRefresh);
-    on<VehicleDetailDataCommitted>(_onRefresh);
+    on<VehicleDetailDataCommitted>(_onDataCommitted);
     _eventSubscription = eventBus.events
         .where((event) => event is FleetDataCommitted)
         .listen((_) => add(const VehicleDetailDataCommitted()));
@@ -54,6 +54,16 @@ final class VehicleDetailBloc
   final String vehicleId;
   final GetVehicleDetail getVehicleDetail;
   late final StreamSubscription<AppEvent> _eventSubscription;
+
+  Future<void> _onDataCommitted(
+    VehicleDetailDataCommitted event,
+    Emitter<VehicleDetailState> emit,
+  ) async {
+    // The first detail read must be from local DuckDB. A commit that races
+    // route creation must not replace that initial read with a loading state.
+    if (state.detail == null) return;
+    await _onRefresh(event, emit);
+  }
 
   Future<void> _onRefresh(
     VehicleDetailEvent event,

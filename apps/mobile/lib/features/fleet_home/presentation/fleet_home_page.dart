@@ -77,7 +77,7 @@ final class _FleetHomeView extends StatelessWidget {
                               const SizedBox(height: SparkeeSpacing.sm),
                           itemBuilder: (_, index) => _FleetRow(
                             row: snapshot.rows[index],
-                            onTap: () => context.go(
+                            onTap: () => context.push(
                               '/vehicles/${snapshot.rows[index].vehicleId}',
                             ),
                           ),
