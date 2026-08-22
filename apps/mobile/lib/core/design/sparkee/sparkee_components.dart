@@ -104,6 +104,7 @@ final class SparkeeFleetRowCard extends StatelessWidget {
     required this.soc,
     required this.rangeKm,
     required this.attentionCount,
+    this.onTap,
     super.key,
   });
 
@@ -113,55 +114,59 @@ final class SparkeeFleetRowCard extends StatelessWidget {
   final String soc;
   final String rangeKm;
   final int attentionCount;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Semantics(
     label:
         '$registrationNumber, $model, ${status.label}, battery $soc, range $rangeKm',
     child: Card(
-      child: Padding(
-        padding: const EdgeInsets.all(SparkeeSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        registrationNumber,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      Text(
-                        model,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(SparkeeSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          registrationNumber,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          model,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                SparkeeFleetStatusChip(status: status),
-              ],
-            ),
-            const SizedBox(height: SparkeeSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: SparkeeMetric(label: 'SOC', value: soc, unit: '%'),
-                ),
-                Expanded(
-                  child: SparkeeMetric(
-                    label: 'Range',
-                    value: rangeKm,
-                    unit: 'km',
+                  SparkeeFleetStatusChip(status: status),
+                ],
+              ),
+              const SizedBox(height: SparkeeSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: SparkeeMetric(label: 'SOC', value: soc, unit: '%'),
                   ),
-                ),
-                if (attentionCount > 0)
-                  SparkeeAlertBadge(count: attentionCount),
-              ],
-            ),
-          ],
+                  Expanded(
+                    child: SparkeeMetric(
+                      label: 'Range',
+                      value: rangeKm,
+                      unit: 'km',
+                    ),
+                  ),
+                  if (attentionCount > 0)
+                    SparkeeAlertBadge(count: attentionCount),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     ),

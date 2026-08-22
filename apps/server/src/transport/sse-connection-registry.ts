@@ -36,7 +36,9 @@ export class SseConnectionRegistry {
 
   add(connection: SseConnection): void {
     this.connections.add(connection);
-    connection.on('close', () => this.remove(connection));
+    connection.on('close', () => {
+      this.remove(connection);
+    });
     this.ensureHeartbeat();
   }
 
@@ -61,12 +63,9 @@ export class SseConnectionRegistry {
   }
 
   private ensureHeartbeat(): void {
-    if (this.heartbeat === undefined) {
-      this.heartbeat = this.startInterval(
-        () => this.writeAll(': heartbeat\n\n'),
-        this.heartbeatIntervalMs,
-      );
-    }
+    this.heartbeat ??= this.startInterval(() => {
+      this.writeAll(': heartbeat\n\n');
+    }, this.heartbeatIntervalMs);
   }
 
   private writeAll(chunk: string): void {

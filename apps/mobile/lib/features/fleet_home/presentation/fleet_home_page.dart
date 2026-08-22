@@ -5,6 +5,7 @@ import 'package:bytebeams/features/fleet_home/domain/fleet_home_models.dart';
 import 'package:bytebeams/features/fleet_home/presentation/fleet_home_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 final class FleetHomePage extends StatelessWidget {
   const FleetHomePage({required this.createBloc, super.key});
@@ -74,8 +75,12 @@ final class _FleetHomeView extends StatelessWidget {
                           itemCount: snapshot.rows.length,
                           separatorBuilder: (_, _) =>
                               const SizedBox(height: SparkeeSpacing.sm),
-                          itemBuilder: (_, index) =>
-                              _FleetRow(row: snapshot.rows[index]),
+                          itemBuilder: (_, index) => _FleetRow(
+                            row: snapshot.rows[index],
+                            onTap: () => context.go(
+                              '/vehicles/${snapshot.rows[index].vehicleId}',
+                            ),
+                          ),
                         ),
                 ),
               ],
@@ -142,9 +147,10 @@ final class _FleetFilters extends StatelessWidget {
 }
 
 final class _FleetRow extends StatelessWidget {
-  const _FleetRow({required this.row});
+  const _FleetRow({required this.row, required this.onTap});
 
   final FleetVehicleRow row;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => SparkeeFleetRowCard(
@@ -159,6 +165,7 @@ final class _FleetRow extends StatelessWidget {
     soc: _displayNumber(row.soc),
     rangeKm: _displayNumber(row.rangeKm),
     attentionCount: row.attentionCount,
+    onTap: onTap,
   );
 
   String _displayNumber(double? value) => value == null

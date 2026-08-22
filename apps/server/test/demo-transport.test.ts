@@ -50,7 +50,11 @@ describe('demo transport', () => {
         client.end();
       });
     } finally {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      });
     }
 
     expect(requestedCursor).toBe('2');

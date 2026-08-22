@@ -66,8 +66,8 @@ class FakeConnection implements SseConnection {
   readonly chunks: string[] = [];
   private closeListener: (() => void) | undefined;
 
-  on(event: 'close', listener: () => void): unknown {
-    this.closeListener = event === 'close' ? listener : undefined;
+  on(_event: 'close', listener: () => void): unknown {
+    this.closeListener = listener;
     return undefined;
   }
 

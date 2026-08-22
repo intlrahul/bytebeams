@@ -194,7 +194,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 7: vehicle detail vertical slice
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Goal:** Explain a vehicle's latest condition and retained SOC history.
 
@@ -212,7 +212,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 - SOC history is event-time ordered and queried from DuckDB.
 - Unit, query integration, BLoC, widget, and navigation tests pass.
 
-**Decisions before implementation:** sparkline versus table presentation and signal formatting precision.
+**Resolved decisions:** use an accessible event-time SOC table for the retained 24-hour window. Format values to at most one decimal place, trim trailing `.0`, and use grouped odometer values. Display reading age relative to the injected UTC clock.
 
 ## Milestone 8: alerts vertical slice
 
