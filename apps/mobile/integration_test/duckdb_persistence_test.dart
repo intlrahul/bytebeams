@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bytebeams/core/data/database/database_migration.dart';
@@ -10,12 +11,74 @@ import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
 import 'package:bytebeams/features/sync/data/duckdb_sync_store.dart';
 import 'package:bytebeams/features/sync/data/sync_dto_mapper.dart';
+import 'package:bytebeams/features/vehicle_detail/data/duckdb_vehicle_detail_repository.dart';
+import 'package:bytebeams/features/vehicle_detail/domain/vehicle_detail_models.dart';
 import 'package:bytebeams_api/bytebeams_api.dart' as api;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets(
+    'given_writer_transaction_in_progress_when_vehicle_read_then_returns_committed_snapshot',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'reader_writer_concurrency_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: await const AssetDatabaseMigrationLoader().load(),
+        clock: _FixedClock(DateTime.utc(2026, 8, 22)),
+      );
+      await database.execute(
+        'INSERT INTO vehicles (vehicle_id, registration_number, model) VALUES (?, ?, ?)',
+        parameters: ['vehicle-1', 'BB-001', 'E-Truck'],
+      );
+      final transactionStarted = Completer<void>();
+      final releaseTransaction = Completer<void>();
+
+      final write = database.transaction<void>((transaction) async {
+        await transaction.execute(
+          'UPDATE vehicles SET registration_number = ? WHERE vehicle_id = ?',
+          parameters: ['BB-UPDATED', 'vehicle-1'],
+        );
+        transactionStarted.complete();
+        await releaseTransaction.future;
+      });
+      await transactionStarted.future;
+
+      final repository = DuckDbVehicleDetailRepository(database);
+      final committed = await repository.getVehicleDetail(
+        vehicleId: 'vehicle-1',
+        asOfUtc: DateTime.utc(2026, 8, 22),
+      );
+      expect(
+        (committed as Success<VehicleDetail, VehicleDetailFailure>)
+            .value
+            .registrationNumber,
+        'BB-001',
+      );
+      releaseTransaction.complete();
+      await write;
+      final updated = await repository.getVehicleDetail(
+        vehicleId: 'vehicle-1',
+        asOfUtc: DateTime.utc(2026, 8, 22),
+      );
+      expect(
+        (updated as Success<VehicleDetail, VehicleDetailFailure>)
+            .value
+            .registrationNumber,
+        'BB-UPDATED',
+      );
+
+      await database.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
 
   testWidgets(
     'given_an_android_app_database_when_reopened_then_retains_a_durable_write',

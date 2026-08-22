@@ -46,19 +46,8 @@ final class DuckDbSyncStore implements SyncStore {
     SyncBootstrapDto bootstrap, {
     required String origin,
   }) => _database.transaction((transaction) async {
-    for (final vehicle in bootstrap.vehicles) {
-      await transaction.execute(
-        upsertVehicle,
-        parameters: [
-          vehicle.vehicleId,
-          vehicle.registrationNumber,
-          vehicle.model,
-        ],
-      );
-    }
-    for (final packet in bootstrap.telemetry) {
-      await _insertPacket(transaction, packet);
-    }
+    await _upsertVehicles(transaction, bootstrap.vehicles);
+    await _insertPackets(transaction, bootstrap.telemetry);
     await _alertProjector?.rebuild(
       transaction,
       bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
@@ -75,19 +64,8 @@ final class DuckDbSyncStore implements SyncStore {
       _database.transaction((transaction) async {
         await transaction.execute(deleteBackendSyncedData);
         await transaction.execute(deleteBackendSyncedVehicles);
-        for (final vehicle in bootstrap.vehicles) {
-          await transaction.execute(
-            upsertVehicle,
-            parameters: [
-              vehicle.vehicleId,
-              vehicle.registrationNumber,
-              vehicle.model,
-            ],
-          );
-        }
-        for (final packet in bootstrap.telemetry) {
-          await _insertPacket(transaction, packet);
-        }
+        await _upsertVehicles(transaction, bootstrap.vehicles);
+        await _insertPackets(transaction, bootstrap.telemetry);
         await _alertProjector?.rebuild(
           transaction,
           bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
@@ -132,6 +110,63 @@ final class DuckDbSyncStore implements SyncStore {
       ),
       failure: (_) => Future<void>.value(),
     );
+  }
+
+  Future<void> _upsertVehicles(
+    DatabaseTransaction transaction,
+    Iterable<Vehicle> vehicles,
+  ) async {
+    final values = vehicles.toList(growable: false);
+    if (values.isEmpty) return;
+    for (final chunk in _chunks(values)) {
+      await transaction.execute(
+        'INSERT INTO vehicles (vehicle_id, registration_number, model) VALUES '
+        '${List.filled(chunk.length, '(?, ?, ?)').join(', ')} '
+        'ON CONFLICT (vehicle_id) DO UPDATE SET '
+        'registration_number = excluded.registration_number, model = excluded.model',
+        parameters: [
+          for (final vehicle in chunk) ...[
+            vehicle.vehicleId,
+            vehicle.registrationNumber,
+            vehicle.model,
+          ],
+        ],
+      );
+    }
+  }
+
+  Future<void> _insertPackets(
+    DatabaseTransaction transaction,
+    Iterable<api.TelemetryPacket> packets,
+  ) async {
+    final values = <List<Object?>>[];
+    for (final packet in packets) {
+      final classified = _classifier.classify(packet);
+      if (classified case Success<ClassifiedTelemetryPacket, TelemetryFailure>(
+        value: final value,
+      )) {
+        values.add(_parameters(value));
+      }
+    }
+    for (final chunk in _chunks(values)) {
+      await transaction.execute(
+        'INSERT INTO telemetry_events ('
+        'packet_id, vehicle_id, event_timestamp_utc, server_received_at_utc, '
+        'client_received_at_utc, signal_name, classification, raw_value_json, '
+        'validation_error, number_value, boolean_value, latitude, longitude, accuracy_meters'
+        ') VALUES ${List.filled(chunk.length, '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')} '
+        'ON CONFLICT (packet_id) DO NOTHING',
+        parameters: [for (final packet in chunk) ...packet],
+      );
+    }
+  }
+
+  Iterable<List<T>> _chunks<T>(List<T> values) sync* {
+    const size = 100;
+    for (var start = 0; start < values.length; start += size) {
+      final end = start + size > values.length ? values.length : start + size;
+      yield values.sublist(start, end);
+    }
   }
 
   List<Object?> _parameters(ClassifiedTelemetryPacket packet) {

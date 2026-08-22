@@ -10,10 +10,14 @@ export interface DemoTransportService {
 }
 
 export class DemoService implements DemoTransportService {
+  private readonly liveDeliveryBaseline: number;
+
   constructor(
     private readonly repository: SqliteDemoRepository,
     private readonly startAtUtc: Date,
-  ) {}
+  ) {
+    this.liveDeliveryBaseline = Number(repository.cursor());
+  }
 
   bootstrap(): Readonly<Record<string, unknown>> {
     const snapshot = this.repository.bootstrap();
@@ -43,7 +47,8 @@ export class DemoService implements DemoTransportService {
   publishNextDelivery(): Readonly<Record<string, unknown>> {
     const sequence = Number(this.repository.cursor()) + 1;
     const vehicleNumber = String(((sequence - 1) % 500) + 1).padStart(3, '0');
-    const eventTimestamp = new Date(this.startAtUtc.getTime() + sequence * 1000).toISOString();
+    const liveSequence = sequence - this.liveDeliveryBaseline;
+    const eventTimestamp = new Date(this.startAtUtc.getTime() + liveSequence * 1000).toISOString();
     const delivery = this.repository.appendPacket(
       {
         packetId: `live:${String(sequence)}`,

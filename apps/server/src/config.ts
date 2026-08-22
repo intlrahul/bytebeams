@@ -4,7 +4,7 @@ const environmentSchema = z.object({
   DATABASE_PATH: z.string().min(1).default('.data/bytebeams-demo.sqlite'),
   DEMO_CLOCK_MODE: z.literal('scripted').default('scripted'),
   DEMO_SEED: z.string().min(1).default('bytebeams-demo-v1'),
-  DEMO_START_AT: z.iso.datetime().default('2026-08-21T00:00:00Z'),
+  DEMO_START_AT: z.iso.datetime().optional(),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
   SIMULATION_INTERVAL_MS: z.coerce.number().int().min(1).default(1000),
 });
@@ -24,7 +24,7 @@ export function readServerConfig(environment: NodeJS.ProcessEnv): ServerConfig {
     databasePath: parsed.DATABASE_PATH,
     demoClockMode: parsed.DEMO_CLOCK_MODE,
     demoSeed: parsed.DEMO_SEED,
-    demoStartAtUtc: new Date(parsed.DEMO_START_AT),
+    demoStartAtUtc: new Date(parsed.DEMO_START_AT ?? new Date().toISOString()),
     port: parsed.PORT,
     simulationIntervalMs: parsed.SIMULATION_INTERVAL_MS,
   };

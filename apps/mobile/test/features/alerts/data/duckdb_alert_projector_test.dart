@@ -29,7 +29,7 @@ void main() {
       final database = _Database(
         soc: [20, now, 'packet-2'],
         active: [
-          ['alert-1', 'warning'],
+          ['alert-1', 'vehicle-1', 'lowBattery', 'warning'],
         ],
       );
       await _projector(now).rebuild(database, ['vehicle-1']);
@@ -57,7 +57,7 @@ void main() {
       final database = _Database(
         soc: [9, now, 'packet-4'],
         active: const [
-          ['alert-1', 'warning'],
+          ['alert-1', 'vehicle-1', 'lowBattery', 'warning'],
         ],
       );
       await _projector(now).rebuild(database, ['vehicle-1']);
@@ -68,6 +68,18 @@ void main() {
           AlertQueries.insertLifecycle,
         ]),
       );
+    },
+  );
+
+  test(
+    'given_many_vehicles_when_rebuilt_then_uses_two_projection_reads',
+    () async {
+      final database = _Database(soc: [15, now, 'packet-5']);
+
+      await _projector(now)
+          .rebuild(database, List.generate(500, (index) => 'vehicle-$index'));
+
+      expect(database.queries, hasLength(2));
     },
   );
 }
@@ -87,6 +99,7 @@ final class _Database implements AppDatabase {
   final List<Object?> soc;
   final List<List<Object?>> active;
   final executions = <(String, List<Object?>)>[];
+  final queries = <String>[];
   @override
   Future<void> close() async {}
   @override
@@ -101,11 +114,13 @@ final class _Database implements AppDatabase {
     String sql, {
     List<Object?> parameters = const [],
   }) async {
-    if (sql == AlertQueries.selectLatestSignal && parameters[1] == 'soc') {
-      return [soc];
+    queries.add(sql);
+    if (sql.contains('FROM telemetry_events')) {
+      return [
+        ['vehicle-1', 'soc', ...soc],
+      ];
     }
-    if (sql == AlertQueries.selectActiveByType &&
-        parameters[1] == 'lowBattery') {
+    if (sql.contains('FROM alert_episodes')) {
       return active;
     }
     return const [];

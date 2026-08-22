@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bytebeams/core/data/database/database_failure.dart';
 import 'package:bytebeams/core/data/database/database_migration.dart';
 import 'package:bytebeams/core/data/database/duckdb_app_database.dart';
@@ -27,6 +29,7 @@ void main() {
       );
 
       expect(driver.openedPaths, ['app.duckdb']);
+      expect(driver.connectCalls, 2);
       expect(connection.executedSql, contains('CREATE TABLE demo'));
       await appDatabase.close();
     },
@@ -180,9 +183,112 @@ void main() {
     },
   );
 
+  test(
+    'given_reader_open_failure_when_opening_then_disposes_writer_and_database',
+    () async {
+      final nativeDatabase = _FakeDatabase();
+      final writer = _FakeConnection();
+      final driver = _ReaderFailingDriver(
+        database: nativeDatabase,
+        writer: writer,
+      );
+
+      await expectLater(
+        DuckDbAppDatabase.open(
+          path: 'app.duckdb',
+          migrations: const [],
+          clock: _FixedClock(),
+          driver: driver,
+        ),
+        throwsA(isA<DatabaseOpenFailure>()),
+      );
+
+      expect(writer.disposed, isTrue);
+      expect(nativeDatabase.disposed, isTrue);
+    },
+  );
+
   test('given_the_system_clock_when_read_then_produces_a_utc_timestamp', () {
     expect(const SystemClock().nowUtc().isUtc, isTrue);
   });
+
+  test('given_writer_transaction_in_progress_when_queried_then_reader_completes_independently', () async {
+    final writer = _FakeConnection();
+    final reader = _FakeConnection(
+      queryRows: [
+        ['committed'],
+      ],
+    );
+    final database = DuckDbAppDatabase.withHandlesForTesting(
+      database: _FakeDatabase(),
+      connection: writer,
+      readerConnection: reader,
+    );
+    final transactionStarted = Completer<void>();
+    final releaseTransaction = Completer<void>();
+
+    final write = database.transaction<void>((_) async {
+      transactionStarted.complete();
+      await releaseTransaction.future;
+    });
+    await transactionStarted.future;
+
+    expect(await database.query('SELECT value FROM demo'), [
+      ['committed'],
+    ]);
+    expect(reader.queriedSql, ['SELECT value FROM demo']);
+    expect(writer.queriedSql, isEmpty);
+
+    releaseTransaction.complete();
+    await write;
+    await database.close();
+  });
+
+  test(
+    'given_transaction_query_when_read_then_uses_writer_connection',
+    () async {
+      final writer = _FakeConnection(
+        queryRows: [
+          ['transaction value'],
+        ],
+      );
+      final reader = _FakeConnection();
+      final database = DuckDbAppDatabase.withHandlesForTesting(
+        database: _FakeDatabase(),
+        connection: writer,
+        readerConnection: reader,
+      );
+
+      final rows = await database.transaction(
+        (transaction) => transaction.query('SELECT value FROM pending_write'),
+      );
+
+      expect(rows.single.single, 'transaction value');
+      expect(writer.queriedSql, ['SELECT value FROM pending_write']);
+      expect(reader.queriedSql, isEmpty);
+      await database.close();
+    },
+  );
+
+  test(
+    'given_separate_connections_when_closed_then_disposes_both_and_database',
+    () async {
+      final writer = _FakeConnection();
+      final reader = _FakeConnection();
+      final nativeDatabase = _FakeDatabase();
+      final database = DuckDbAppDatabase.withHandlesForTesting(
+        database: nativeDatabase,
+        connection: writer,
+        readerConnection: reader,
+      );
+
+      await database.close();
+
+      expect(reader.disposed, isTrue);
+      expect(writer.disposed, isTrue);
+      expect(nativeDatabase.disposed, isTrue);
+    },
+  );
 }
 
 DuckDbAppDatabase _database(_FakeConnection connection) {
@@ -198,10 +304,13 @@ final class _FakeDriver implements DuckDbDriver {
   final duckdb.Database database;
   final duckdb.Connection connection;
   final List<String> openedPaths = [];
+  var connectCalls = 0;
 
   @override
-  Future<duckdb.Connection> connect(duckdb.Database database) async =>
-      connection;
+  Future<duckdb.Connection> connect(duckdb.Database database) async {
+    connectCalls += 1;
+    return connection;
+  }
 
   @override
   Future<duckdb.Database> open(String path) async {
@@ -217,6 +326,24 @@ final class _FailingDriver implements DuckDbDriver {
 
   @override
   Future<duckdb.Database> open(String path) => throw StateError('unavailable');
+}
+
+final class _ReaderFailingDriver implements DuckDbDriver {
+  _ReaderFailingDriver({required this.database, required this.writer});
+
+  final duckdb.Database database;
+  final duckdb.Connection writer;
+  var connectCalls = 0;
+
+  @override
+  Future<duckdb.Connection> connect(duckdb.Database database) async {
+    connectCalls += 1;
+    if (connectCalls == 2) throw StateError('reader unavailable');
+    return writer;
+  }
+
+  @override
+  Future<duckdb.Database> open(String path) async => database;
 }
 
 final class _FakeDatabase implements duckdb.Database {
@@ -237,6 +364,7 @@ final class _FakeConnection implements duckdb.Connection {
   }) : queryResult = _FakeResultSet(queryRows);
 
   final List<String> executedSql = [];
+  final List<String> queriedSql = [];
   final _FakePreparedStatement statement = _FakePreparedStatement();
   final _FakeResultSet queryResult;
   final bool failDispose;
@@ -269,7 +397,10 @@ final class _FakeConnection implements duckdb.Connection {
   Future<duckdb.ResultSet> query(
     String query, {
     duckdb.DuckDBCancellationToken? token,
-  }) async => queryResult;
+  }) async {
+    queriedSql.add(query);
+    return queryResult;
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

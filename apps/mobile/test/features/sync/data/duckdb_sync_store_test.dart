@@ -69,15 +69,10 @@ void main() {
     expect(database.transactions, 1);
     expect(
       database.executions.map((entry) => entry.sql),
-      containsAll([
-        upsertVehicle,
-        insertTelemetryEvent,
-        upsertSyncCursor,
-        upsertSyncOrigin,
-      ]),
+      containsAll([upsertSyncCursor, upsertSyncOrigin]),
     );
     final telemetry = database.executions.firstWhere(
-      (entry) => entry.sql == insertTelemetryEvent,
+      (entry) => entry.sql.startsWith('INSERT INTO telemetry_events'),
     );
     expect(telemetry.parameters[9], 80.0);
     expect(telemetry.parameters[10], isNull);

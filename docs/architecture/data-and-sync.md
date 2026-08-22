@@ -78,8 +78,15 @@ If the requested cursor predates the bounded backend delivery log, surface an ex
 
 - `AppEventBus` delivers payload-free `FleetDataCommitted` events asynchronously. Consumers always re-query DuckDB after an event.
 - Live SSE deliveries are retained in an in-memory batch and committed transactionally every five seconds or at 100 packets, whichever comes first. A batch inserts all packets and advances its final delivery cursor in the same DuckDB transaction, then emits one `FleetDataCommitted`. App shutdown attempts a final flush. This intentionally risks at most five seconds of uncommitted packets if the process is killed.
+- DuckDB access uses one serialized writer connection and one serialized reader
+  connection over the same app-scoped database handle. Ordinary repository
+  queries use the reader and observe the last committed snapshot while sync owns
+  a writer transaction. Transaction-scoped reads stay on the writer. After a
+  successful commit, `FleetDataCommitted` prompts interested BLoCs to re-query
+  the reader; event payloads never become authoritative state. See ADR 0002.
 - Reconnect delays are deterministic with no jitter: 1, 2, 4, 8, then 15 seconds for every later retry.
 - A fresh install whose bootstrap fails exposes an explicit **Use demo data** action. It imports the packaged fixture through the same transactional store; it never silently replaces server data.
+- The interactive demo server bases its scripted fixture clock on server startup UTC unless `DEMO_START_AT` is explicitly supplied. Explicit values keep fixtures deterministic in tests. Its monotonic delivery cursor is independent from the live-script sequence: bootstrap deliveries retain their cursor IDs, while the first live packet is timestamped one second after the fixture start. The default 500-vehicle fixture contains 150 Moving, 125 Idle, 125 Stopped, and 100 Offline vehicles, plus deterministic fresh alert scenarios.
 - The sync repository retains its current state as well as broadcasting updates, so a screen that subscribes after background bootstrap begins still renders a visible sync indicator or the explicit demo-data action.
 - The Android emulator endpoint is `http://10.0.2.2:3000`; iOS, web, and local development use `http://localhost:3000`. Endpoint literals are owned only by the endpoint provider.
 - A normal bootstrap upserts its current snapshot and preserves older local retained telemetry. It writes the bootstrap cursor in the same transaction, then SSE resumes using that persisted cursor and `Last-Event-ID`.
@@ -89,6 +96,8 @@ If the requested cursor predates the bounded backend delivery log, surface an ex
 The server can produce one or more live packets per second. Refreshing Fleet Home after every packet would repeatedly run its DuckDB projections and rebuild the list, making scrolling and filtering feel slow even though `ListView` lazily creates row widgets.
 
 The mobile client therefore batches live deliveries for at most five seconds, or commits immediately when 100 packets are pending. It performs one DuckDB transaction for the batch, writes the final delivery cursor in that same transaction, and publishes one payload-free `FleetDataCommitted` event only after the transaction succeeds. Fleet Home then re-queries DuckDB once per committed batch.
+
+Bootstrap inserts registry and telemetry through multi-row SQL statements inside the same transaction. This retains atomic snapshot/cursor semantics while reducing Android emulator round trips. The cold 500-vehicle bootstrap target is under ten seconds on the supported Android emulator; measure it with the Android integration workflow before claiming the target is met.
 
 This deliberately accepts a bounded durability gap: if the app process is killed before a batch commits, up to five seconds of packets may exist only in memory. The persisted cursor remains at the prior successful batch, so reconnect uses `Last-Event-ID` to replay those deliveries; packet-ID deduplication keeps the replay idempotent. A normal app shutdown attempts a final flush. The 100-packet ceiling prevents large transactions when a vehicle returns from a connectivity gap and sends a backlog.
 

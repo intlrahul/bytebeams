@@ -42,8 +42,9 @@ describe('sqlite demo repository', () => {
     );
     const snapshot = repository.bootstrap();
     expect(snapshot.vehicles).toHaveLength(2);
-    expect(snapshot.telemetry).toHaveLength(6);
-    expect(repository.readAfter('0')).toHaveLength(6);
+    const packets = createDemoPackets(vehicles, new Date('2026-08-21T00:00:00Z'));
+    expect(snapshot.telemetry).toHaveLength(packets.length);
+    expect(repository.readAfter('0')).toHaveLength(packets.length);
     expect(repository.oldestCursor()).toBe('1');
     database.close();
   });
@@ -73,6 +74,32 @@ describe('sqlite demo repository', () => {
     expect(delivery.deliveryId).toBe(String(Number(initialCursor) + 1));
     expect(repository.cursor()).toBe(delivery.deliveryId);
     expect(repository.readAfter(initialCursor)).toHaveLength(1);
+    database.close();
+  });
+
+  it('given_a_large_bootstrap_cursor_when_live_delivery_published_then_timestamp_starts_at_live_sequence', () => {
+    // Given
+    const database = new Database(':memory:');
+    migrate(database, migrations);
+    const startAtUtc = new Date('2026-08-21T00:00:00.000Z');
+    const vehicles = createDemoVehicles('seed', 500);
+    const repository = new SqliteDemoRepository(database);
+    repository.seed(vehicles, createDemoPackets(vehicles, startAtUtc), startAtUtc.toISOString());
+    const initialCursor = repository.cursor();
+    const service = new DemoService(repository, startAtUtc);
+
+    // When
+    const delivery = service.publishNextDelivery();
+
+    // Then
+    expect(Number(initialCursor)).toBeGreaterThan(300);
+    expect(delivery).toMatchObject({
+      deliveryId: String(Number(initialCursor) + 1),
+      packet: {
+        packetId: `live:${String(Number(initialCursor) + 1)}`,
+        eventTimestamp: '2026-08-21T00:00:01.000Z',
+      },
+    });
     database.close();
   });
 });

@@ -28,21 +28,51 @@ export function createDemoPackets(
   startAtUtc: Date,
 ): readonly DemoPacket[] {
   return vehicles.flatMap((vehicle, index) => {
-    const eventTimestamp = new Date(startAtUtc.getTime() + index * 1000).toISOString();
-    return [
+    const status =
+      index < 150 ? 'moving' : index < 275 ? 'idle' : index < 400 ? 'stopped' : 'offline';
+    const eventTimestamp = new Date(
+      startAtUtc.getTime() - (status === 'offline' ? 11 * 60_000 : index * 1000),
+    ).toISOString();
+    const packets: DemoPacket[] = [
       packet(vehicle.vehicleId, eventTimestamp, 'last_ping', {
         kind: 'boolean',
         booleanValue: true,
       }),
       packet(vehicle.vehicleId, eventTimestamp, 'soc', {
         kind: 'number',
-        numberValue: 20 + (index % 70),
-      }),
-      packet(vehicle.vehicleId, eventTimestamp, 'speed', {
-        kind: 'number',
-        numberValue: index % 3 === 0 ? 45 : 0,
+        numberValue: index % 50 === 0 ? 8 : index % 25 === 0 ? 15 : 35 + (index % 55),
       }),
     ];
+    if (status === 'moving') {
+      packets.push(
+        packet(vehicle.vehicleId, eventTimestamp, 'speed', { kind: 'number', numberValue: 45 }),
+      );
+    } else if (status === 'idle') {
+      packets.push(
+        packet(vehicle.vehicleId, eventTimestamp, 'speed', { kind: 'number', numberValue: 0 }),
+        packet(vehicle.vehicleId, eventTimestamp, 'ignition', {
+          kind: 'boolean',
+          booleanValue: true,
+        }),
+      );
+    } else {
+      packets.push(
+        packet(vehicle.vehicleId, eventTimestamp, 'speed', { kind: 'number', numberValue: 0 }),
+        packet(vehicle.vehicleId, eventTimestamp, 'ignition', {
+          kind: 'boolean',
+          booleanValue: false,
+        }),
+      );
+    }
+    if (index % 40 === 0) {
+      packets.push(
+        packet(vehicle.vehicleId, eventTimestamp, 'battery_temp', {
+          kind: 'number',
+          numberValue: 50,
+        }),
+      );
+    }
+    return packets;
   });
 }
 

@@ -26,12 +26,20 @@ final class NativeDuckDbDriver implements DuckDbDriver {
 }
 
 final class DuckDbAppDatabase implements AppDatabase {
-  DuckDbAppDatabase._(this._database, this._connection);
+  DuckDbAppDatabase._(
+    this._database,
+    this._writerConnection,
+    this._readerConnection,
+  );
 
   final duckdb.Database _database;
-  final duckdb.Connection _connection;
-  final _OperationQueue _queue = _OperationQueue();
+  final duckdb.Connection _writerConnection;
+  final duckdb.Connection _readerConnection;
+  final _OperationQueue _writerQueue = _OperationQueue();
+  final _OperationQueue _readerQueue = _OperationQueue();
   var _isClosed = false;
+  var _isClosing = false;
+  Future<void>? _closeFuture;
 
   static Future<DuckDbAppDatabase> open({
     required String path,
@@ -40,22 +48,28 @@ final class DuckDbAppDatabase implements AppDatabase {
     DuckDbDriver driver = const NativeDuckDbDriver(),
   }) async {
     duckdb.Database? database;
-    duckdb.Connection? connection;
+    duckdb.Connection? writerConnection;
+    duckdb.Connection? readerConnection;
 
     try {
       database = await driver.open(path);
-      connection = await driver.connect(database);
-      final appDatabase = DuckDbAppDatabase._(database, connection);
+      writerConnection = await driver.connect(database);
+      final migrationDatabase = DuckDbAppDatabase._(
+        database,
+        writerConnection,
+        writerConnection,
+      );
       await MigrationRunner(
         migrations: migrations,
         clock: clock,
-      ).migrate(appDatabase);
-      return appDatabase;
+      ).migrate(migrationDatabase);
+      readerConnection = await driver.connect(database);
+      return DuckDbAppDatabase._(database, writerConnection, readerConnection);
     } on DatabaseFailure {
-      await _disposeQuietly(connection, database);
+      await _disposeQuietly(readerConnection, writerConnection, database);
       rethrow;
     } catch (error) {
-      await _disposeQuietly(connection, database);
+      await _disposeQuietly(readerConnection, writerConnection, database);
       throw DatabaseOpenFailure(
         safeMessage: 'The local database could not be opened',
         cause: error,
@@ -67,18 +81,31 @@ final class DuckDbAppDatabase implements AppDatabase {
   factory DuckDbAppDatabase.withHandlesForTesting({
     required duckdb.Database database,
     required duckdb.Connection connection,
+    duckdb.Connection? readerConnection,
   }) {
-    return DuckDbAppDatabase._(database, connection);
+    return DuckDbAppDatabase._(
+      database,
+      connection,
+      readerConnection ?? connection,
+    );
   }
 
   static Future<void> _disposeQuietly(
-    duckdb.Connection? connection,
+    duckdb.Connection? readerConnection,
+    duckdb.Connection? writerConnection,
     duckdb.Database? database,
   ) async {
     try {
-      await connection?.dispose();
+      await readerConnection?.dispose();
     } catch (_) {
       // The original open or migration failure remains the useful diagnostic.
+    }
+    if (!identical(readerConnection, writerConnection)) {
+      try {
+        await writerConnection?.dispose();
+      } catch (_) {
+        // The original open or migration failure remains the useful diagnostic.
+      }
     }
     try {
       await database?.dispose();
@@ -89,10 +116,10 @@ final class DuckDbAppDatabase implements AppDatabase {
 
   @override
   Future<void> execute(String sql, {List<Object?> parameters = const []}) {
-    return _queue.run(() async {
-      _ensureOpen();
-      return _executeWith(_connection, sql, parameters);
-    });
+    if (!_acceptsOperations) return Future.error(const DatabaseClosedFailure());
+    return _writerQueue.run(
+      () => _executeWith(_writerConnection, sql, parameters),
+    );
   }
 
   @override
@@ -100,22 +127,22 @@ final class DuckDbAppDatabase implements AppDatabase {
     String sql, {
     List<Object?> parameters = const [],
   }) {
-    return _queue.run(() async {
-      _ensureOpen();
-      return _queryWith(_connection, sql, parameters);
-    });
+    if (!_acceptsOperations) return Future.error(const DatabaseClosedFailure());
+    return _readerQueue.run(
+      () => _queryWith(_readerConnection, sql, parameters),
+    );
   }
 
   @override
   Future<T> transaction<T>(
     Future<T> Function(DatabaseTransaction transaction) action,
   ) {
-    return _queue.run(() async {
-      _ensureOpen();
+    if (!_acceptsOperations) return Future.error(const DatabaseClosedFailure());
+    return _writerQueue.run(() async {
       try {
-        await _connection.execute('BEGIN TRANSACTION');
-        final result = await action(_DuckDbTransaction(_connection));
-        await _connection.execute('COMMIT');
+        await _writerConnection.execute('BEGIN TRANSACTION');
+        final result = await action(_DuckDbTransaction(_writerConnection));
+        await _writerConnection.execute('COMMIT');
         return result;
       } on DatabaseFailure {
         await _rollbackQuietly();
@@ -140,36 +167,51 @@ final class DuckDbAppDatabase implements AppDatabase {
 
   @override
   Future<void> close() {
-    return _queue.run(() async {
-      if (_isClosed) {
-        return;
+    if (_isClosed) return Future<void>.value();
+    final existingClose = _closeFuture;
+    if (existingClose != null) return existingClose;
+    _isClosing = true;
+    final closeFuture = () async {
+      await Future.wait([_readerQueue.drain(), _writerQueue.drain()]);
+      Object? disposeError;
+      try {
+        await _readerConnection.dispose();
+      } catch (error) {
+        disposeError = error;
+      }
+      if (!identical(_readerConnection, _writerConnection)) {
+        try {
+          await _writerConnection.dispose();
+        } catch (error) {
+          disposeError ??= error;
+        }
       }
       try {
-        await _connection.dispose();
         await _database.dispose();
-        _isClosed = true;
       } catch (error) {
+        disposeError ??= error;
+      }
+      _isClosed = true;
+      if (disposeError != null) {
         throw DatabaseCloseFailure(
           safeMessage: 'The local database could not be closed',
-          cause: error,
+          cause: disposeError,
         );
       }
-    });
+    }();
+    _closeFuture = closeFuture;
+    return closeFuture;
   }
 
   Future<void> _rollbackQuietly() async {
     try {
-      await _connection.execute('ROLLBACK');
+      await _writerConnection.execute('ROLLBACK');
     } catch (_) {
       // Preserve the operation failure that caused rollback.
     }
   }
 
-  void _ensureOpen() {
-    if (_isClosed) {
-      throw const DatabaseClosedFailure();
-    }
-  }
+  bool get _acceptsOperations => !_isClosing && !_isClosed;
 }
 
 final class _DuckDbTransaction implements DatabaseTransaction {
@@ -253,4 +295,6 @@ final class _OperationQueue {
     _tail = result.then<void>((_) {}, onError: (_, _) {});
     return result;
   }
+
+  Future<void> drain() => _tail;
 }
