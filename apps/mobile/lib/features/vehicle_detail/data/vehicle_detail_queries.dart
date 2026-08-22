@@ -37,4 +37,10 @@ WHERE vehicle_id = ?
   AND event_timestamp_utc >= ?
 ORDER BY event_timestamp_utc ASC, server_received_at_utc ASC NULLS LAST, packet_id ASC
 ''';
+  static const selectRecentTrips = '''
+SELECT ov.display_name, dv.display_name, t.started_at_utc FROM trips t
+JOIN geofence_versions ov ON ov.geofence_id=t.origin_geofence_id AND ov.version=t.origin_geofence_version
+LEFT JOIN geofence_versions dv ON dv.geofence_id=t.destination_geofence_id AND dv.version=t.destination_geofence_version
+WHERE t.vehicle_id=? ORDER BY t.started_at_utc DESC,t.trip_id ASC LIMIT 4
+''';
 }

@@ -79,10 +79,11 @@ final class _Database implements AppDatabase {
         ['soc', 10.0, DateTime.utc(2026, 8, 22, 11, 55)],
         ['range', 50.0, DateTime.utc(2026, 8, 22, 11, 45)],
       ],
-      _ => [
+      3 => [
         [DateTime.utc(2026, 8, 21, 13), 30.0],
         [DateTime.utc(2026, 8, 22, 11), 10.0],
       ],
+      _ => const [],
     };
   }
 }

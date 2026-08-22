@@ -3,12 +3,18 @@ import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart
 import 'package:bytebeams/features/geofences/domain/geofence_models.dart';
 import 'package:bytebeams/features/geofences/domain/geofence_repository.dart';
 import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
+import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
 
 final class DuckDbGeofenceRepository implements GeofenceRepository {
-  const DuckDbGeofenceRepository(this._database, this._projector);
+  const DuckDbGeofenceRepository(
+    this._database,
+    this._projector, {
+    this.tripProjector,
+  });
 
   final AppDatabase _database;
   final GeofenceProjector _projector;
+  final TripProjector? tripProjector;
 
   @override
   Future<GeofencesResult> getAll({required DateTime nowUtc}) async {
@@ -186,6 +192,10 @@ final class DuckDbGeofenceRepository implements GeofenceRepository {
       'SELECT vehicle_id FROM vehicles ORDER BY vehicle_id ASC',
     );
     await _projector.rebuild(
+      transaction,
+      rows.map((row) => row.single! as String),
+    );
+    await tripProjector?.rebuild(
       transaction,
       rows.map((row) => row.single! as String),
     );

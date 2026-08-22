@@ -268,7 +268,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 10: automatic trips vertical slice
 
-**Status:** `NOT STARTED`
+**Status:** `COMPLETE`
 
 **Goal:** Build idempotent event-time trips from confirmed geofence transitions.
 
@@ -289,7 +289,9 @@ Update status only when repository evidence supports it. A milestone is not comp
 - Trips, transitions, and geofence versions survive restart and are retained.
 - Algorithm, DuckDB replay, invariant, BLoC, widget, and end-to-end tests pass.
 
-**Decisions before implementation:** trip-list/detail presentation and bounded replay-window optimization that preserves correctness.
+**Resolved decisions:** Use dedicated Trips list and Trip Detail routes. Vehicle Detail shows the three most recent trips and opens Trips filtered to that vehicle when more exist. Rebuild each affected vehicle from complete retained history in this milestone; defer bounded replay optimization to Milestone 11.
+
+**Validation evidence:** Flutter formatting and analysis passed. All 211 Flutter unit/widget tests passed with 93.37% line coverage. Android integration tests passed, including durable completed-trip projection after database reopen.
 
 ## Milestone 11: retention and replay hardening
 

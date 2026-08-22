@@ -36,6 +36,11 @@ final class AssetDatabaseMigrationLoader implements DatabaseMigrationLoader {
       name: 'create versioned geofences',
       path: 'assets/migrations/0005_geofences.sql',
     ),
+    (
+      version: 6,
+      name: 'create automatic trips',
+      path: 'assets/migrations/0006_trips.sql',
+    ),
   ];
 
   @override

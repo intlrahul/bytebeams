@@ -34,6 +34,10 @@ final class DuckDbVehicleDetailRepository implements VehicleDetailRepository {
           asOfUtc.subtract(const Duration(hours: 24)).toIso8601String(),
         ],
       );
+      final trips = await _database.query(
+        VehicleDetailQueries.selectRecentTrips,
+        parameters: [vehicleId],
+      );
       final row = vehicle.single;
       return Result.success(
         VehicleDetail(
@@ -51,6 +55,17 @@ final class DuckDbVehicleDetailRepository implements VehicleDetailRepository {
                 ),
               )
               .toList(growable: false),
+          recentTrips: trips
+              .take(3)
+              .map(
+                (trip) => VehicleRecentTrip(
+                  origin: trip[0]! as String,
+                  destination: trip[1] as String?,
+                  startedAtUtc: trip[2]! as DateTime,
+                ),
+              )
+              .toList(),
+          hasMoreTrips: trips.length > 3,
         ),
       );
     } on DatabaseFailure {

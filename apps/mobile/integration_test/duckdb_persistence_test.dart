@@ -7,6 +7,7 @@ import 'package:bytebeams/core/data/database/database_path_provider.dart';
 import 'package:bytebeams/core/data/database/duckdb_app_database.dart';
 import 'package:bytebeams/core/time/clock.dart';
 import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
+import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
 import 'package:bytebeams/features/telemetry/data/duckdb_telemetry_repository.dart';
 import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
@@ -20,6 +21,69 @@ import 'package:integration_test/integration_test.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets(
+    'given_confirmed_exit_and_entry_when_reopened_then_retains_one_completed_trip',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'milestone_10_trip_projection_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final migrations = await const AssetDatabaseMigrationLoader().load();
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      await database.execute(
+        'INSERT INTO geofence_transitions (transition_id, vehicle_id, geofence_id, geofence_version, transition_type, event_timestamp_utc, packet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        parameters: [
+          'exit-a',
+          'vehicle-1',
+          'site-a',
+          1,
+          'exit',
+          DateTime.utc(2026, 1, 1),
+          'packet-exit',
+        ],
+      );
+      await database.execute(
+        'INSERT INTO geofence_transitions (transition_id, vehicle_id, geofence_id, geofence_version, transition_type, event_timestamp_utc, packet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        parameters: [
+          'entry-b',
+          'vehicle-1',
+          'site-b',
+          1,
+          'entry',
+          DateTime.utc(2026, 1, 1, 1),
+          'packet-entry',
+        ],
+      );
+      await database.transaction<void>(
+        (transaction) =>
+            const DuckDbTripProjector().rebuild(transaction, ['vehicle-1']),
+      );
+      await database.close();
+
+      final reopened = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      expect(
+        await reopened.query(
+          'SELECT trip_id, status, destination_geofence_id FROM trips',
+        ),
+        [
+          ['vehicle-1:exit-a', 'completed', 'site-b'],
+        ],
+      );
+      await reopened.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
 
   testWidgets(
     'given_writer_transaction_in_progress_when_vehicle_read_then_returns_committed_snapshot',

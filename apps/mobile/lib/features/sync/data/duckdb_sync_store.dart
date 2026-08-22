@@ -1,6 +1,7 @@
 import 'package:bytebeams/core/data/database/app_database.dart';
 import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
 import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
+import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
 import 'package:bytebeams/features/sync/data/sync_dto_mapper.dart';
 import 'package:bytebeams/features/sync/data/sync_queries.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
@@ -25,12 +26,14 @@ final class DuckDbSyncStore implements SyncStore {
     required this._classifier,
     this._alertProjector,
     this._geofenceProjector,
+    this._tripProjector,
   });
 
   final AppDatabase _database;
   final TelemetryPacketClassifier _classifier;
   final AlertProjector? _alertProjector;
   final GeofenceProjector? _geofenceProjector;
+  final TripProjector? _tripProjector;
 
   @override
   Future<String?> deliveryCursor() async {
@@ -59,6 +62,10 @@ final class DuckDbSyncStore implements SyncStore {
       transaction,
       bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
     );
+    await _tripProjector?.rebuild(
+      transaction,
+      bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
+    );
     await transaction.execute(
       upsertSyncCursor,
       parameters: [bootstrap.deliveryCursor],
@@ -81,6 +88,10 @@ final class DuckDbSyncStore implements SyncStore {
           transaction,
           bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
         );
+        await _tripProjector?.rebuild(
+          transaction,
+          bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
+        );
         await transaction.execute(
           upsertSyncCursor,
           parameters: [bootstrap.deliveryCursor],
@@ -99,6 +110,10 @@ final class DuckDbSyncStore implements SyncStore {
           deliveries.map((delivery) => delivery.packet.vehicleId),
         );
         await _geofenceProjector?.rebuild(
+          transaction,
+          deliveries.map((delivery) => delivery.packet.vehicleId),
+        );
+        await _tripProjector?.rebuild(
           transaction,
           deliveries.map((delivery) => delivery.packet.vehicleId),
         );

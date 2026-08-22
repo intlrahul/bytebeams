@@ -16,18 +16,27 @@ void main() {
         'assets/migrations/0003_sync_state.sql': 'three',
         'assets/migrations/0004_alerts.sql': 'four',
         'assets/migrations/0005_geofences.sql': 'five',
+        'assets/migrations/0006_trips.sql': 'six',
       }),
     );
 
     final migrations = await loader.load();
 
-    expect(migrations.map((migration) => migration.version), [1, 2, 3, 4, 5]);
+    expect(migrations.map((migration) => migration.version), [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+    ]);
     expect(migrations.map((migration) => migration.sql), [
       'one',
       'two',
       'three',
       'four',
       'five',
+      'six',
     ]);
   });
 

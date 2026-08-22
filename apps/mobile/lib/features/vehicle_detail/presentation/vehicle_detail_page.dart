@@ -6,6 +6,7 @@ import 'package:bytebeams/features/vehicle_detail/domain/vehicle_detail_models.d
 import 'package:bytebeams/features/vehicle_detail/presentation/vehicle_detail_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 final class VehicleDetailPage extends StatelessWidget {
   const VehicleDetailPage({required this.createBloc, super.key});
@@ -73,6 +74,27 @@ final class _VehicleDetailView extends StatelessWidget {
               (reading) =>
                   _ReadingRow(reading: reading, asOfUtc: detail.asOfUtc),
             ),
+            if (detail.recentTrips.isNotEmpty) ...[
+              const SizedBox(height: SparkeeSpacing.lg),
+              Text(
+                'Recent trips',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              ...detail.recentTrips.map(
+                (trip) => ListTile(
+                  title: Text(
+                    '${trip.origin} → ${trip.destination ?? 'Awaiting destination'}',
+                  ),
+                  subtitle: Text(_timestamp(trip.startedAtUtc)),
+                ),
+              ),
+              if (detail.hasMoreTrips)
+                TextButton(
+                  onPressed: () =>
+                      context.push('/trips?vehicleId=${detail.vehicleId}'),
+                  child: const Text('View all trips'),
+                ),
+            ],
             const SizedBox(height: SparkeeSpacing.lg),
             Text(
               'SOC history — last 24 hours',

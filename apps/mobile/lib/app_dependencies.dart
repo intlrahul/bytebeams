@@ -13,6 +13,10 @@ import 'package:bytebeams/features/geofences/domain/geofence_repository.dart';
 import 'package:bytebeams/features/geofences/domain/geofence_use_cases.dart';
 import 'package:bytebeams/features/geofences/presentation/geofence_bloc.dart';
 import 'package:bytebeams/features/sync/domain/use_demo_data.dart';
+import 'package:bytebeams/features/trips/data/duckdb_trip_repository.dart';
+import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
+import 'package:bytebeams/features/trips/domain/trip_repository.dart';
+import 'package:bytebeams/features/trips/presentation/trips_bloc.dart';
 import 'package:bytebeams/features/vehicle_detail/data/duckdb_vehicle_detail_repository.dart';
 import 'package:bytebeams/features/vehicle_detail/domain/get_vehicle_detail.dart';
 import 'package:bytebeams/features/vehicle_detail/domain/vehicle_detail_repository.dart';
@@ -41,6 +45,7 @@ final class AppDependencies {
         DuckDbGeofenceRepository(
           runtime.database,
           const DuckDbGeofenceProjector(),
+          tripProjector: const DuckDbTripProjector(),
         ),
       )
       ..registerSingleton(
@@ -82,6 +87,16 @@ final class AppDependencies {
       ..registerSingleton<VehicleDetailRepository>(
         DuckDbVehicleDetailRepository(runtime.database),
       )
+      ..registerSingleton<TripRepository>(
+        DuckDbTripRepository(runtime.database),
+      )
+      ..registerFactoryParam<TripsBloc, String?, void>(
+        (vehicleId, _) => TripsBloc(
+          repository: _services<TripRepository>(),
+          eventBus: runtime.eventBus,
+          vehicleId: vehicleId,
+        ),
+      )
       ..registerSingleton(
         GetVehicleDetail(
           repository: _services<VehicleDetailRepository>(),
@@ -118,4 +133,8 @@ final class AppDependencies {
         undoAlertDismissal: _services<UndoAlertDismissal>(),
         eventBus: _services<AppRuntime>().eventBus,
       );
+
+  TripRepository get tripRepository => _services<TripRepository>();
+  TripsBloc createTripsBloc(String? vehicleId) =>
+      _services<TripsBloc>(param1: vehicleId);
 }

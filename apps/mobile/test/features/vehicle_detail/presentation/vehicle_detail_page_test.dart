@@ -12,6 +12,7 @@ import 'package:bytebeams/features/vehicle_detail/presentation/vehicle_detail_bl
 import 'package:bytebeams/features/vehicle_detail/presentation/vehicle_detail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   testWidgets(
@@ -41,6 +42,48 @@ void main() {
       expect(find.text('Range'), findsOneWidget);
       expect(find.text('—'), findsOneWidget);
       expect(find.text('SOC history — last 24 hours'), findsOneWidget);
+      await events.close();
+    },
+  );
+
+  testWidgets(
+    'given_more_recent_trips_when_rendered_then_shows_three_and_opens_filtered_trips',
+    (tester) async {
+      final events = AsyncAppEventBus();
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => VehicleDetailPage(
+              createBloc: () => VehicleDetailBloc(
+                vehicleId: 'vehicle-1',
+                getVehicleDetail: GetVehicleDetail(
+                  repository: const _RecentTripsRepository(),
+                  clock: const _Clock(),
+                ),
+                eventBus: events,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/trips',
+            builder: (_, state) =>
+                Text('Filtered ${state.uri.queryParameters['vehicleId']}'),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp.router(theme: SparkeeTheme.light(), routerConfig: router),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hub → Depot'), findsOneWidget);
+      expect(find.text('Depot → Yard'), findsOneWidget);
+      expect(find.text('Yard → Hub'), findsOneWidget);
+      await tester.tap(find.text('View all trips'));
+      await tester.pumpAndSettle();
+      expect(find.text('Filtered vehicle-1'), findsOneWidget);
       await events.close();
     },
   );
@@ -208,6 +251,43 @@ final class _EmptyHistoryRepository implements VehicleDetailRepository {
       asOfUtc: asOfUtc,
       readings: const [],
       socHistory: const [],
+    ),
+  );
+}
+
+final class _RecentTripsRepository implements VehicleDetailRepository {
+  const _RecentTripsRepository();
+
+  @override
+  Future<VehicleDetailResult> getVehicleDetail({
+    required String vehicleId,
+    required DateTime asOfUtc,
+  }) async => Result.success(
+    VehicleDetail(
+      vehicleId: vehicleId,
+      registrationNumber: 'BB-003',
+      model: 'E-Truck',
+      asOfUtc: asOfUtc,
+      readings: const [],
+      socHistory: const [],
+      hasMoreTrips: true,
+      recentTrips: [
+        VehicleRecentTrip(
+          origin: 'Hub',
+          destination: 'Depot',
+          startedAtUtc: DateTime.utc(2026, 1, 3),
+        ),
+        VehicleRecentTrip(
+          origin: 'Depot',
+          destination: 'Yard',
+          startedAtUtc: DateTime.utc(2026, 1, 2),
+        ),
+        VehicleRecentTrip(
+          origin: 'Yard',
+          destination: 'Hub',
+          startedAtUtc: DateTime.utc(2026, 1, 1),
+        ),
+      ],
     ),
   );
 }

@@ -3,6 +3,7 @@ import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart
 import 'package:bytebeams/features/geofences/data/duckdb_geofence_repository.dart';
 import 'package:bytebeams/features/geofences/domain/geofence_models.dart';
 import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
+import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -83,6 +84,49 @@ void main() {
       isNot(contains('m.geofence_version = v.version')),
     );
   });
+  test('given_membership_when_read_then_maps_optional_geofence_data', () async {
+    final membership = await _repository(
+      _Database(
+        membership: [
+          ["Demo", now],
+        ],
+      ),
+    ).membershipForVehicle('vehicle-1');
+
+    expect(membership?.geofenceName, 'Demo');
+    expect(membership?.observedAtUtc, now);
+  });
+  test('given_no_membership_when_read_then_returns_null', () async {
+    expect(
+      await _repository(_Database(membership: const []))
+          .membershipForVehicle('vehicle-1'),
+      isNull,
+    );
+  });
+  test(
+    'given_trip_projector_when_geofence_created_then_rebuilds_trips',
+    () async {
+      final database = _Database();
+      final trips = _TripProjector();
+      await DuckDbGeofenceRepository(
+        database,
+        _Projector(),
+        tripProjector: trips,
+      ).create(
+        const GeofenceDraft(
+          displayName: 'New',
+          latitude: 12.9,
+          longitude: 77.6,
+          radiusMeters: 50,
+        ),
+        nowUtc: now,
+      );
+
+      expect(trips.calls, [
+        ['vehicle-1'],
+      ]);
+    },
+  );
 }
 
 DuckDbGeofenceRepository _repository(_Database database) =>
@@ -97,8 +141,20 @@ final class _Projector implements GeofenceProjector {
   ) async => calls.add(vehicleIds.toList());
 }
 
+final class _TripProjector implements TripProjector {
+  final calls = <List<String>>[];
+
+  @override
+  Future<void> rebuild(
+    DatabaseTransaction database,
+    Iterable<String> vehicleIds,
+  ) async => calls.add(vehicleIds.toList());
+}
+
 final class _Database implements AppDatabase {
+  _Database({this.membership});
   final executed = <(String, List<Object?>)>[];
+  final List<List<Object?>>? membership;
   String? lastQuery;
   @override
   Future<void> close() async {}
@@ -123,6 +179,9 @@ final class _Database implements AppDatabase {
       return const [
         ['vehicle-1'],
       ];
+    }
+    if (sql.contains('FROM vehicle_geofence_memberships')) {
+      return membership ?? const [];
     }
     if (sql.contains('FROM geofence_versions WHERE geofence_id')) {
       return [

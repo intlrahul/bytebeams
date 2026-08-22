@@ -35,6 +35,8 @@ final class VehicleDetail {
     required this.asOfUtc,
     required this.readings,
     required this.socHistory,
+    this.recentTrips = const [],
+    this.hasMoreTrips = false,
     this.geofenceName,
   });
 
@@ -44,7 +46,20 @@ final class VehicleDetail {
   final DateTime asOfUtc;
   final List<VehicleReading> readings;
   final List<SocHistoryPoint> socHistory;
+  final List<VehicleRecentTrip> recentTrips;
+  final bool hasMoreTrips;
   final String? geofenceName;
+}
+
+final class VehicleRecentTrip {
+  const VehicleRecentTrip({
+    required this.origin,
+    this.destination,
+    required this.startedAtUtc,
+  });
+  final String origin;
+  final String? destination;
+  final DateTime startedAtUtc;
 }
 
 sealed class VehicleDetailFailure {

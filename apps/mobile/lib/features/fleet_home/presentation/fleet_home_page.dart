@@ -55,6 +55,11 @@ final class _FleetHomeView extends StatelessWidget {
                 tooltip: 'Geofences',
                 onPressed: () => context.push('/geofences'),
               ),
+              IconButton(
+                icon: const Icon(Icons.route_outlined),
+                tooltip: 'Trips',
+                onPressed: () => context.push('/trips'),
+              ),
             ],
             body: Column(
               children: [

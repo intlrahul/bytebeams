@@ -7,6 +7,7 @@ import 'package:bytebeams/core/diagnostics/app_logger.dart';
 import 'package:bytebeams/core/time/clock.dart';
 import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
 import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
+import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
 import 'package:bytebeams/features/geofences/data/geofence_seed.dart';
 import 'package:flutter/foundation.dart';
 import 'package:bytebeams/features/sync/data/api_endpoint_provider.dart';
@@ -74,6 +75,7 @@ final class AppRuntime {
         classifier: const TelemetryPacketClassifier(clock: clock),
         alertProjector: const DuckDbAlertProjector(clock: clock),
         geofenceProjector: geofenceProjector,
+        tripProjector: const DuckDbTripProjector(),
       ),
       demoDataImporter: const AssetDemoDataImporter(),
       eventBus: eventBus,
