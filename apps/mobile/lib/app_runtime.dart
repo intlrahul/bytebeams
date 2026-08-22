@@ -6,6 +6,8 @@ import 'package:bytebeams/core/diagnostics/app_dio_factory.dart';
 import 'package:bytebeams/core/diagnostics/app_logger.dart';
 import 'package:bytebeams/core/time/clock.dart';
 import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
+import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
+import 'package:bytebeams/features/geofences/data/geofence_seed.dart';
 import 'package:flutter/foundation.dart';
 import 'package:bytebeams/features/sync/data/api_endpoint_provider.dart';
 import 'package:bytebeams/features/sync/data/demo_data_importer.dart';
@@ -55,6 +57,11 @@ final class AppRuntime {
                 ))
             .open();
     final eventBus = AsyncAppEventBus();
+    const geofenceProjector = DuckDbGeofenceProjector();
+    await database.transaction(
+      (transaction) =>
+          const GeofenceSeed(projector: geofenceProjector).ensure(transaction),
+    );
     final coordinator = FleetSyncCoordinator(
       remote: DioFleetRemoteDataSource(
         dio: AppDioFactory.create(logger: appLogger, clock: clock),
@@ -66,6 +73,7 @@ final class AppRuntime {
         database: database,
         classifier: const TelemetryPacketClassifier(clock: clock),
         alertProjector: const DuckDbAlertProjector(clock: clock),
+        geofenceProjector: geofenceProjector,
       ),
       demoDataImporter: const AssetDemoDataImporter(),
       eventBus: eventBus,

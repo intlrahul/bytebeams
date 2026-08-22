@@ -9,13 +9,15 @@ final class SparkeeAppScaffold extends StatelessWidget {
   const SparkeeAppScaffold({
     required this.title,
     required this.body,
+    this.actions,
     super.key,
   });
   final String title;
   final Widget body;
+  final List<Widget>? actions;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(title)),
+    appBar: AppBar(title: Text(title), actions: actions),
     body: body,
   );
 }

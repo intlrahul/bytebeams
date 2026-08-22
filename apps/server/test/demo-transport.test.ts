@@ -83,6 +83,6 @@ function service(): DemoTransportService {
     bootstrap: () => ({ vehicles: [], telemetry: [], deliveryCursor: '3' }),
     deliveriesAfter: (cursor) => [{ deliveryId: String(Number(cursor) + 1), packet: {} }],
     replayGap: () => null,
-    publishNextDelivery: () => ({ deliveryId: '4', packet: {} }),
+    publishNextDeliveries: () => [{ deliveryId: '4', packet: {} }],
   };
 }

@@ -4,6 +4,20 @@
 
 A geofence has stable identity, name, centre, radius, active state, and immutable versions. Create at least three deterministic seeds. Edits and deactivation apply prospectively. Each version owns a half-open interval `[effective_from, effective_until)`. Historical and late locations use the definition effective at event time.
 
+The first release provides a dedicated, map-free Geofences screen with a list,
+add form, edit form, and deactivation action. A geofence is never hard-deleted:
+historical versions remain available for interpretation. Validate a trimmed name
+as 1–80 characters, radius as 50 m–50 km inclusive, latitude as -90…90, and
+longitude as -180…180. The app seeds the synthetic, demo-labelled Bengaluru
+sites Sarjapur Hub, Electronic City Depot, and Whitefield Service Yard.
+
+The demo backend owns the synthetic movement script. On every simulation tick
+it appends one connectivity packet and one location packet, then advances both
+sequence positions in SQLite in the same transaction. The persisted sequence
+is resumed after a server restart, so packet IDs and route progress do not
+repeat. The mobile app treats these as ordinary raw telemetry and remains the
+owner of geofence classification, confirmation, replay, and derived state.
+
 ## Reading classification
 
 For reported GPS accuracy `a`:
@@ -45,6 +59,12 @@ Choose the winning clearly-inside geofence by smallest radius, then shortest cen
 Do not infer a physical crossing time in a missing interval. A late reading causes deterministic replay of the affected vehicle's event-time window. Reconcile by deleting obsolete derived rows and upserting current transitions/trips; append-only correction is insufficient.
 
 Deterministic transition identity inputs and the safe replay-window strategy must be fixed before implementation and covered by permutation tests.
+
+For the initial release, rebuild every affected vehicle from its complete
+retained location history. This deliberately favours correctness over a
+shorter, unverified replay window. A transition ID is the deterministic tuple
+`vehicle_id + geofence_id + geofence_version + transition_type +
+event_timestamp + packet_id`.
 
 ## Trips
 

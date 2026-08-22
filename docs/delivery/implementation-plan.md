@@ -243,7 +243,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 9: geofences vertical slice
 
-**Status:** `NOT STARTED`
+**Status:** `COMPLETE`
 
 **Goal:** Manage versioned circular geofences and deterministic current membership without a map.
 
@@ -262,7 +262,9 @@ Update status only when repository evidence supports it. A milestone is not comp
 - Overlaps resolve by smallest radius, shortest centre distance, then stable `geofence_id`.
 - CRUD, version history, jitter, inaccurate GPS, overlap, missing interval, late-event, and restart tests pass.
 
-**Decisions before implementation:** geofence management screen design, input validation bounds, and seeded geofence coordinates.
+**Resolved decisions:** Use a dedicated map-free Geofences route with persisted list, add/edit forms, and deactivation only; never hard-delete a geofence. Validate a trimmed non-empty 1–80-character name while retaining its entered display form, radius 50 m–50 km inclusive, latitude -90…90 inclusive, and longitude -180…180 inclusive. Seed synthetic demo-labelled Bengaluru operational sites: Sarjapur Hub, Electronic City Depot, and Whitefield Service Yard. Rebuild each affected vehicle from its complete retained location history. Transition identity is `vehicle_id + geofence_id + geofence_version + transition_type + event_timestamp + packet_id`.
+
+**Validation evidence:** Server formatting, lint, and all 21 tests passed with 92.1% line coverage. Flutter analysis and all 188 unit/widget tests passed with 92.88% line coverage. Android integration tests passed, including durable geofence membership across database reopen.
 
 ## Milestone 10: automatic trips vertical slice
 

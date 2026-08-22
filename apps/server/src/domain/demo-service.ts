@@ -1,4 +1,5 @@
 import { SqliteDemoRepository } from '../data/sqlite-demo-repository.js';
+import { createLiveLocationPacket } from './demo-location-scenarios.js';
 
 export interface DemoTransportService {
   bootstrap(): Readonly<Record<string, unknown>>;
@@ -6,18 +7,16 @@ export interface DemoTransportService {
   replayGap(
     cursor: string,
   ): Readonly<{ oldestAvailableCursor: string; requestedCursor: string }> | null;
-  publishNextDelivery(): Readonly<Record<string, unknown>>;
+  publishNextDeliveries(): readonly Readonly<Record<string, unknown>>[];
 }
 
 export class DemoService implements DemoTransportService {
-  private readonly liveDeliveryBaseline: number;
+  private sessionTick = 0;
 
   constructor(
     private readonly repository: SqliteDemoRepository,
     private readonly startAtUtc: Date,
-  ) {
-    this.liveDeliveryBaseline = Number(repository.cursor());
-  }
+  ) {}
 
   bootstrap(): Readonly<Record<string, unknown>> {
     const snapshot = this.repository.bootstrap();
@@ -44,24 +43,48 @@ export class DemoService implements DemoTransportService {
       : null;
   }
 
-  publishNextDelivery(): Readonly<Record<string, unknown>> {
-    const sequence = Number(this.repository.cursor()) + 1;
-    const vehicleNumber = String(((sequence - 1) % 500) + 1).padStart(3, '0');
-    const liveSequence = sequence - this.liveDeliveryBaseline;
-    const eventTimestamp = new Date(this.startAtUtc.getTime() + liveSequence * 1000).toISOString();
-    const delivery = this.repository.appendPacket(
+  publishNextDeliveries(): readonly Readonly<Record<string, unknown>>[] {
+    const state = this.liveSimulatorState();
+    this.sessionTick += 1;
+    const eventTimestamp = new Date(
+      this.startAtUtc.getTime() + this.sessionTick * 1000,
+    ).toISOString();
+    const vehicleNumber = String((state.pingStep % 500) + 1).padStart(3, '0');
+    const packets = [
       {
-        packetId: `live:${String(sequence)}`,
+        packetId: `live:ping:${String(state.pingStep)}`,
         vehicleId: `vehicle-${vehicleNumber}`,
         eventTimestamp,
         signalName: 'last_ping',
         value: { kind: 'boolean', booleanValue: true },
       },
+      createLiveLocationPacket(state.locationStep, eventTimestamp),
+    ];
+    const deliveries = this.repository.appendPacketsAndSetSimulatorState(
+      packets,
       eventTimestamp,
+      'live_simulation',
+      JSON.stringify({
+        pingStep: state.pingStep + 1,
+        locationStep: state.locationStep + 1,
+      }),
     );
-    return {
+    return deliveries.map((delivery) => ({
       deliveryId: String(delivery.deliveryId),
       packet: packetFromDelivery(delivery),
+    }));
+  }
+
+  private liveSimulatorState(): Readonly<{ locationStep: number; pingStep: number }> {
+    const persisted = this.repository.simulatorState('live_simulation');
+    if (persisted === null) return { locationStep: 0, pingStep: 0 };
+    const parsed = JSON.parse(persisted) as Partial<{
+      locationStep: number;
+      pingStep: number;
+    }>;
+    return {
+      locationStep: parsed.locationStep ?? 0,
+      pingStep: parsed.pingStep ?? 0,
     };
   }
 }

@@ -69,11 +69,14 @@ describe('sqlite demo repository', () => {
     const service = new DemoService(repository, new Date('2026-08-21T00:00:00Z'));
     const initialCursor = repository.cursor();
 
-    const delivery = service.publishNextDelivery();
+    const deliveries = service.publishNextDeliveries();
 
-    expect(delivery.deliveryId).toBe(String(Number(initialCursor) + 1));
-    expect(repository.cursor()).toBe(delivery.deliveryId);
-    expect(repository.readAfter(initialCursor)).toHaveLength(1);
+    expect(deliveries.map((delivery) => delivery.deliveryId)).toEqual([
+      String(Number(initialCursor) + 1),
+      String(Number(initialCursor) + 2),
+    ]);
+    expect(repository.cursor()).toBe(deliveries[1]?.deliveryId);
+    expect(repository.readAfter(initialCursor)).toHaveLength(2);
     database.close();
   });
 
@@ -89,16 +92,29 @@ describe('sqlite demo repository', () => {
     const service = new DemoService(repository, startAtUtc);
 
     // When
-    const delivery = service.publishNextDelivery();
+    const deliveries = service.publishNextDeliveries();
 
     // Then
     expect(Number(initialCursor)).toBeGreaterThan(300);
-    expect(delivery).toMatchObject({
-      deliveryId: String(Number(initialCursor) + 1),
-      packet: {
-        packetId: `live:${String(Number(initialCursor) + 1)}`,
-        eventTimestamp: '2026-08-21T00:00:01.000Z',
+    expect(deliveries).toMatchObject([
+      {
+        deliveryId: String(Number(initialCursor) + 1),
+        packet: {
+          packetId: 'live:ping:0',
+          eventTimestamp: '2026-08-21T00:00:01.000Z',
+        },
       },
+      {
+        deliveryId: String(Number(initialCursor) + 2),
+        packet: {
+          packetId: 'live:location:0',
+          eventTimestamp: '2026-08-21T00:00:01.000Z',
+        },
+      },
+    ]);
+    const restarted = new DemoService(repository, startAtUtc);
+    expect(restarted.publishNextDeliveries()[1]).toMatchObject({
+      packet: { packetId: 'live:location:1' },
     });
     database.close();
   });

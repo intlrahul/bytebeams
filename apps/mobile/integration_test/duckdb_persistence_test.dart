@@ -6,6 +6,7 @@ import 'package:bytebeams/core/data/database/database_migration_loader.dart';
 import 'package:bytebeams/core/data/database/database_path_provider.dart';
 import 'package:bytebeams/core/data/database/duckdb_app_database.dart';
 import 'package:bytebeams/core/time/clock.dart';
+import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
 import 'package:bytebeams/features/telemetry/data/duckdb_telemetry_repository.dart';
 import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
@@ -269,7 +270,95 @@ void main() {
       if (await file.exists()) await file.delete();
     },
   );
+
+  testWidgets(
+    'given_two_inside_locations_when_reopened_then_retains_geofence_membership',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'geofence_membership_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: await const AssetDatabaseMigrationLoader().load(),
+        clock: _FixedClock(DateTime.utc(2026, 8, 22, 12)),
+      );
+      await database.execute(
+        'INSERT INTO vehicles (vehicle_id, registration_number, model) VALUES (?, ?, ?)',
+        parameters: ['vehicle-1', 'BB-001', 'E-Truck'],
+      );
+      await database.execute(
+        'INSERT INTO geofences (geofence_id, created_at_utc) VALUES (?, ?)',
+        parameters: ['demo-hub', '2026-01-01T00:00:00.000Z'],
+      );
+      await database.execute(
+        'INSERT INTO geofence_versions (geofence_id, version, display_name, latitude, longitude, radius_meters, is_active, effective_from_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        parameters: [
+          'demo-hub',
+          1,
+          'Demo Hub',
+          12.9,
+          77.6,
+          1000,
+          true,
+          '2026-01-01T00:00:00.000Z',
+        ],
+      );
+      final store = DuckDbSyncStore(
+        database: database,
+        classifier: TelemetryPacketClassifier(
+          clock: _FixedClock(DateTime.utc(2026, 8, 22, 12)),
+        ),
+        geofenceProjector: const DuckDbGeofenceProjector(),
+      );
+      await store.ingestDeliveries([
+        _locationDelivery('1', 'location-1', DateTime.utc(2026, 8, 22, 11, 58)),
+        _locationDelivery('2', 'location-2', DateTime.utc(2026, 8, 22, 11, 59)),
+      ]);
+      await database.close();
+      final reopened = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: await const AssetDatabaseMigrationLoader().load(),
+        clock: _FixedClock(DateTime.utc(2026, 8, 22, 12)),
+      );
+      expect(
+        await reopened.query(
+          'SELECT geofence_id FROM vehicle_geofence_memberships WHERE vehicle_id = ?',
+          parameters: ['vehicle-1'],
+        ),
+        [
+          ['demo-hub'],
+        ],
+      );
+      await reopened.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
 }
+
+SyncDeliveryDto _locationDelivery(
+  String deliveryId,
+  String packetId,
+  DateTime timestamp,
+) => SyncDeliveryDto(
+  deliveryId: deliveryId,
+  packet: api.TelemetryPacket(
+    packetId: packetId,
+    vehicleId: 'vehicle-1',
+    eventTimestamp: timestamp,
+    signalName: 'location',
+    value: api.SignalValue(
+      kind: api.SignalValueKindEnum.location,
+      locationValue: api.LocationValue(
+        latitude: 12.9,
+        longitude: 77.6,
+        accuracyMeters: 10,
+      ),
+    ),
+  ),
+);
 
 final class _FixedClock implements Clock {
   const _FixedClock(this.value);

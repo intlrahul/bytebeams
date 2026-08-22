@@ -31,6 +31,11 @@ final class AssetDatabaseMigrationLoader implements DatabaseMigrationLoader {
       name: 'create alert episodes',
       path: 'assets/migrations/0004_alerts.sql',
     ),
+    (
+      version: 5,
+      name: 'create versioned geofences',
+      path: 'assets/migrations/0005_geofences.sql',
+    ),
   ];
 
   @override

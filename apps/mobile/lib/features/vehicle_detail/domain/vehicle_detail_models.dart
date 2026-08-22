@@ -35,6 +35,7 @@ final class VehicleDetail {
     required this.asOfUtc,
     required this.readings,
     required this.socHistory,
+    this.geofenceName,
   });
 
   final String vehicleId;
@@ -43,6 +44,7 @@ final class VehicleDetail {
   final DateTime asOfUtc;
   final List<VehicleReading> readings;
   final List<SocHistoryPoint> socHistory;
+  final String? geofenceName;
 }
 
 sealed class VehicleDetailFailure {

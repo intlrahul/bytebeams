@@ -48,6 +48,10 @@ final class _VehicleDetailView extends StatelessWidget {
           padding: const EdgeInsets.all(SparkeeSpacing.md),
           children: [
             Text(detail.model, style: Theme.of(context).textTheme.titleMedium),
+            if (detail.geofenceName != null) ...[
+              const SizedBox(height: SparkeeSpacing.xs),
+              Text('Current geofence: ${detail.geofenceName}'),
+            ],
             const SizedBox(height: SparkeeSpacing.lg),
             if (state.alerts.isNotEmpty) ...[
               Text('Attention', style: Theme.of(context).textTheme.titleLarge),

@@ -38,6 +38,7 @@ export function createDemoPackets(
         kind: 'boolean',
         booleanValue: true,
       }),
+      ...locationPackets(vehicle.vehicleId, eventTimestamp, index),
       packet(vehicle.vehicleId, eventTimestamp, 'soc', {
         kind: 'number',
         numberValue: index % 50 === 0 ? 8 : index % 25 === 0 ? 15 : 35 + (index % 55),
@@ -74,6 +75,35 @@ export function createDemoPackets(
     }
     return packets;
   });
+}
+
+function locationPackets(
+  vehicleId: string,
+  eventTimestamp: string,
+  index: number,
+): readonly DemoPacket[] {
+  const sites = [
+    { latitude: 12.9016, longitude: 77.6877 },
+    { latitude: 12.8456, longitude: 77.6603 },
+    { latitude: 12.9698, longitude: 77.7499 },
+  ];
+  const site = sites[index % sites.length];
+  if (site === undefined) {
+    throw new Error('Demo location site is unavailable');
+  }
+  const firstTimestamp = new Date(new Date(eventTimestamp).getTime() - 60_000).toISOString();
+  const value = {
+    kind: 'location',
+    locationValue: {
+      latitude: site.latitude,
+      longitude: site.longitude,
+      accuracyMeters: 10,
+    },
+  };
+  return [
+    packet(vehicleId, firstTimestamp, 'location', value),
+    packet(vehicleId, eventTimestamp, 'location', value),
+  ];
 }
 
 function packet(

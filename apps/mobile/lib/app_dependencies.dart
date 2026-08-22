@@ -7,6 +7,11 @@ import 'package:bytebeams/features/fleet_home/data/duckdb_fleet_home_repository.
 import 'package:bytebeams/features/fleet_home/domain/fleet_home_repository.dart';
 import 'package:bytebeams/features/fleet_home/domain/get_fleet_home.dart';
 import 'package:bytebeams/features/fleet_home/presentation/fleet_home_bloc.dart';
+import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
+import 'package:bytebeams/features/geofences/data/duckdb_geofence_repository.dart';
+import 'package:bytebeams/features/geofences/domain/geofence_repository.dart';
+import 'package:bytebeams/features/geofences/domain/geofence_use_cases.dart';
+import 'package:bytebeams/features/geofences/presentation/geofence_bloc.dart';
 import 'package:bytebeams/features/sync/domain/use_demo_data.dart';
 import 'package:bytebeams/features/vehicle_detail/data/duckdb_vehicle_detail_repository.dart';
 import 'package:bytebeams/features/vehicle_detail/domain/get_vehicle_detail.dart';
@@ -31,6 +36,30 @@ final class AppDependencies {
       ..registerSingleton(UseDemoData(repository: runtime.syncRepository))
       ..registerSingleton<AlertRepository>(
         DuckDbAlertRepository(runtime.database),
+      )
+      ..registerSingleton<GeofenceRepository>(
+        DuckDbGeofenceRepository(
+          runtime.database,
+          const DuckDbGeofenceProjector(),
+        ),
+      )
+      ..registerSingleton(
+        GetGeofences(
+          repository: _services<GeofenceRepository>(),
+          clock: const SystemClock(),
+        ),
+      )
+      ..registerSingleton(
+        SaveGeofence(
+          repository: _services<GeofenceRepository>(),
+          clock: const SystemClock(),
+        ),
+      )
+      ..registerSingleton(
+        DeactivateGeofence(
+          repository: _services<GeofenceRepository>(),
+          clock: const SystemClock(),
+        ),
       )
       ..registerSingleton(
         GetVehicleAlerts(
@@ -72,6 +101,13 @@ final class AppDependencies {
   final GetIt _services;
 
   FleetHomeBloc createFleetHomeBloc() => _services<FleetHomeBloc>();
+
+  GeofenceBloc createGeofenceBloc() => GeofenceBloc(
+    _services<GetGeofences>(),
+    _services<SaveGeofence>(),
+    _services<DeactivateGeofence>(),
+    eventBus: _services<AppRuntime>().eventBus,
+  );
 
   VehicleDetailBloc createVehicleDetailBloc(String vehicleId) =>
       VehicleDetailBloc(

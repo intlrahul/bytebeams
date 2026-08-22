@@ -28,7 +28,9 @@ const sseConnections = new SseConnectionRegistry();
 const app = createApp(service, sseConnections);
 
 setInterval(() => {
-  sseConnections.broadcast(service.publishNextDelivery());
+  for (const delivery of service.publishNextDeliveries()) {
+    sseConnections.broadcast(delivery);
+  }
 }, config.simulationIntervalMs).unref();
 
 app.listen(config.port, () => {

@@ -1,8 +1,11 @@
 abstract final class VehicleDetailQueries {
   static const selectVehicle = '''
-SELECT vehicle_id, registration_number, model
-FROM vehicles
-WHERE vehicle_id = ?
+SELECT v.vehicle_id, v.registration_number, v.model, g.display_name
+FROM vehicles v
+LEFT JOIN vehicle_geofence_memberships m ON m.vehicle_id = v.vehicle_id
+LEFT JOIN geofence_versions g ON g.geofence_id = m.geofence_id
+  AND g.version = m.geofence_version
+WHERE v.vehicle_id = ?
 ''';
 
   static const selectLatestReadings = '''

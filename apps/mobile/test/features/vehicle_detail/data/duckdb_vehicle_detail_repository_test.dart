@@ -46,7 +46,7 @@ void main() {
 final class _Database implements AppDatabase {
   _Database({
     this.vehicle = const [
-      ['vehicle-1', 'BB-001', 'E-Truck'],
+      ['vehicle-1', 'BB-001', 'E-Truck', null],
     ],
     this.fails = false,
   });

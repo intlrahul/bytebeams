@@ -40,6 +40,7 @@ final class DuckDbVehicleDetailRepository implements VehicleDetailRepository {
           vehicleId: row[0]! as String,
           registrationNumber: row[1]! as String,
           model: row[2]! as String,
+          geofenceName: row[3] as String?,
           asOfUtc: asOfUtc,
           readings: _readings(readings, asOfUtc),
           socHistory: history

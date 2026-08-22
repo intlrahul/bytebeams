@@ -68,13 +68,32 @@ export class SqliteDemoRepository {
       .all(Number(cursor)) as readonly Record<string, unknown>[];
   }
 
-  appendPacket(packet: DemoPacket, nowUtc: string): Readonly<Record<string, unknown>> {
+  simulatorState(key: string): string | null {
+    const row = this.database
+      .prepare('SELECT value FROM simulator_state WHERE key = ?')
+      .get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  }
+
+  appendPacketsAndSetSimulatorState(
+    packets: readonly DemoPacket[],
+    nowUtc: string,
+    stateKey: string,
+    stateValue: string,
+  ): readonly Record<string, unknown>[] {
     const write = this.database.transaction(() => {
-      this.database
-        .prepare(
-          'INSERT INTO telemetry_packets (packet_id, vehicle_id, event_timestamp, signal_name, value_json, server_received_at) VALUES (?, ?, ?, ?, ?, ?)',
-        )
-        .run(
+      const telemetry = this.database.prepare(
+        'INSERT INTO telemetry_packets (packet_id, vehicle_id, event_timestamp, signal_name, value_json, server_received_at) VALUES (?, ?, ?, ?, ?, ?)',
+      );
+      const delivery = this.database.prepare(
+        'INSERT INTO delivery_log (packet_id, created_at) VALUES (?, ?)',
+      );
+      const read = this.database.prepare(
+        'SELECT d.delivery_id AS deliveryId, t.packet_id AS packetId, t.vehicle_id AS vehicleId, t.event_timestamp AS eventTimestamp, t.signal_name AS signalName, t.value_json AS valueJson, t.server_received_at AS serverReceivedAt FROM delivery_log d JOIN telemetry_packets t ON t.packet_id = d.packet_id WHERE d.delivery_id = ?',
+      );
+      const rows: Record<string, unknown>[] = [];
+      for (const packet of packets) {
+        telemetry.run(
           packet.packetId,
           packet.vehicleId,
           packet.eventTimestamp,
@@ -82,20 +101,22 @@ export class SqliteDemoRepository {
           JSON.stringify(packet.value),
           nowUtc,
         );
-      const result = this.database
-        .prepare('INSERT INTO delivery_log (packet_id, created_at) VALUES (?, ?)')
-        .run(packet.packetId, nowUtc);
-      return this.database
+        const result = delivery.run(packet.packetId, nowUtc);
+        const row = read.get(result.lastInsertRowid) as Record<string, unknown> | undefined;
+        if (row === undefined) {
+          throw new Error('Newly persisted demo delivery could not be read');
+        }
+        rows.push(row);
+      }
+      this.database
         .prepare(
-          'SELECT d.delivery_id AS deliveryId, t.packet_id AS packetId, t.vehicle_id AS vehicleId, t.event_timestamp AS eventTimestamp, t.signal_name AS signalName, t.value_json AS valueJson, t.server_received_at AS serverReceivedAt FROM delivery_log d JOIN telemetry_packets t ON t.packet_id = d.packet_id WHERE d.delivery_id = ?',
+          'INSERT INTO simulator_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
         )
-        .get(result.lastInsertRowid) as Record<string, unknown> | undefined;
+        .run(stateKey, stateValue);
+      this.prune(nowUtc);
+      return rows;
     });
-    const delivery = write();
-    if (delivery === undefined) {
-      throw new Error('Newly persisted demo delivery could not be read');
-    }
-    return delivery;
+    return write();
   }
 
   oldestCursor(): string | null {
