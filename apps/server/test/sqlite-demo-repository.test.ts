@@ -71,12 +71,12 @@ describe('sqlite demo repository', () => {
 
     const deliveries = service.publishNextDeliveries();
 
-    expect(deliveries.map((delivery) => delivery.deliveryId)).toEqual([
-      String(Number(initialCursor) + 1),
-      String(Number(initialCursor) + 2),
-    ]);
-    expect(repository.cursor()).toBe(deliveries[1]?.deliveryId);
-    expect(repository.readAfter(initialCursor)).toHaveLength(2);
+    expect(deliveries).toHaveLength(41);
+    expect(deliveries.map((delivery) => delivery.deliveryId)).toEqual(
+      Array.from({ length: 41 }, (_, index) => String(Number(initialCursor) + index + 1)),
+    );
+    expect(repository.cursor()).toBe(deliveries[40]?.deliveryId);
+    expect(repository.readAfter(initialCursor)).toHaveLength(41);
     database.close();
   });
 
@@ -96,26 +96,30 @@ describe('sqlite demo repository', () => {
 
     // Then
     expect(Number(initialCursor)).toBeGreaterThan(300);
-    expect(deliveries).toMatchObject([
-      {
-        deliveryId: String(Number(initialCursor) + 1),
-        packet: {
-          packetId: 'live:ping:0',
-          eventTimestamp: '2026-08-21T00:00:01.000Z',
-        },
+    expect(deliveries[0]).toMatchObject({
+      deliveryId: String(Number(initialCursor) + 1),
+      packet: {
+        packetId: 'live:ping:0',
+        vehicleId: 'vehicle-006',
+        eventTimestamp: '2026-08-21T00:00:01.000Z',
       },
-      {
-        deliveryId: String(Number(initialCursor) + 2),
-        packet: {
-          packetId: 'live:location:0',
-          eventTimestamp: '2026-08-21T00:00:01.000Z',
-        },
-      },
-    ]);
+    });
+    expect(
+      deliveries
+        .filter((delivery) =>
+          String((delivery.packet as Record<string, unknown>).packetId).startsWith(
+            'live:location:',
+          ),
+        )
+        .map((delivery) => (delivery.packet as Record<string, unknown>).packetId),
+    ).toEqual(
+      ['001', '002', '003', '004', '005'].map((vehicle) => `live:location:0:vehicle-${vehicle}`),
+    );
     const restarted = new DemoService(repository, startAtUtc);
     expect(restarted.publishNextDeliveries()[1]).toMatchObject({
-      packet: { packetId: 'live:location:1' },
+      packet: { packetId: 'live:location:1:vehicle-001' },
     });
+    expect(repository.simulatorState('live_simulation')).toContain('odometerKm');
     database.close();
   });
 });

@@ -1,5 +1,8 @@
 import { SqliteDemoRepository } from '../data/sqlite-demo-repository.js';
-import { createLiveLocationPacket } from './demo-location-scenarios.js';
+import {
+  createLiveVehicleTelemetry,
+  type DemoVehicleSimulatorStates,
+} from './demo-location-scenarios.js';
 
 export interface DemoTransportService {
   bootstrap(): Readonly<Record<string, unknown>>;
@@ -49,7 +52,12 @@ export class DemoService implements DemoTransportService {
     const eventTimestamp = new Date(
       this.startAtUtc.getTime() + this.sessionTick * 1000,
     ).toISOString();
-    const vehicleNumber = String((state.pingStep % 500) + 1).padStart(3, '0');
+    const vehicleNumber = String((state.pingStep % 495) + 6).padStart(3, '0');
+    const telemetry = createLiveVehicleTelemetry(
+      state.locationStep,
+      eventTimestamp,
+      state.vehicles,
+    );
     const packets = [
       {
         packetId: `live:ping:${String(state.pingStep)}`,
@@ -58,7 +66,7 @@ export class DemoService implements DemoTransportService {
         signalName: 'last_ping',
         value: { kind: 'boolean', booleanValue: true },
       },
-      createLiveLocationPacket(state.locationStep, eventTimestamp),
+      ...telemetry.packets,
     ];
     const deliveries = this.repository.appendPacketsAndSetSimulatorState(
       packets,
@@ -67,6 +75,7 @@ export class DemoService implements DemoTransportService {
       JSON.stringify({
         pingStep: state.pingStep + 1,
         locationStep: state.locationStep + 1,
+        vehicles: telemetry.states,
       }),
     );
     return deliveries.map((delivery) => ({
@@ -75,16 +84,22 @@ export class DemoService implements DemoTransportService {
     }));
   }
 
-  private liveSimulatorState(): Readonly<{ locationStep: number; pingStep: number }> {
+  private liveSimulatorState(): Readonly<{
+    locationStep: number;
+    pingStep: number;
+    vehicles: DemoVehicleSimulatorStates;
+  }> {
     const persisted = this.repository.simulatorState('live_simulation');
-    if (persisted === null) return { locationStep: 0, pingStep: 0 };
+    if (persisted === null) return { locationStep: 0, pingStep: 0, vehicles: {} };
     const parsed = JSON.parse(persisted) as Partial<{
       locationStep: number;
       pingStep: number;
+      vehicles: DemoVehicleSimulatorStates;
     }>;
     return {
       locationStep: parsed.locationStep ?? 0,
       pingStep: parsed.pingStep ?? 0,
+      vehicles: parsed.vehicles ?? {},
     };
   }
 }

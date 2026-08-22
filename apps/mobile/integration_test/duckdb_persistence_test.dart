@@ -272,7 +272,7 @@ void main() {
   );
 
   testWidgets(
-    'given_two_inside_locations_when_reopened_then_retains_geofence_membership',
+    'given_live_inside_and_outside_locations_when_reopened_then_updates_membership',
     (tester) async {
       const provider = ApplicationSupportDatabasePathProvider(
         fileName: 'geofence_membership_probe.duckdb',
@@ -332,6 +332,77 @@ void main() {
           ['demo-hub'],
         ],
       );
+      final reopenedStore = DuckDbSyncStore(
+        database: reopened,
+        classifier: TelemetryPacketClassifier(
+          clock: _FixedClock(DateTime.utc(2026, 8, 22, 12)),
+        ),
+        geofenceProjector: const DuckDbGeofenceProjector(),
+      );
+      await reopenedStore.ingestDeliveries([
+        _locationDelivery(
+          '3',
+          'location-3',
+          DateTime.utc(2026, 8, 22, 11, 59, 10),
+          longitude: 77.62,
+        ),
+        _locationDelivery(
+          '4',
+          'location-4',
+          DateTime.utc(2026, 8, 22, 11, 59, 20),
+          longitude: 77.62,
+        ),
+        _numberDelivery(
+          '5',
+          'speed-5',
+          DateTime.utc(2026, 8, 22, 11, 59, 30),
+          signalName: 'speed',
+          value: 32,
+        ),
+        _numberDelivery(
+          '6',
+          'soc-6',
+          DateTime.utc(2026, 8, 22, 11, 59, 30),
+          signalName: 'soc',
+          value: 81.8,
+        ),
+        _numberDelivery(
+          '7',
+          'range-7',
+          DateTime.utc(2026, 8, 22, 11, 59, 30),
+          signalName: 'range',
+          value: 245.4,
+        ),
+      ]);
+      expect(
+        await reopened.query(
+          'SELECT geofence_id FROM vehicle_geofence_memberships WHERE vehicle_id = ?',
+          parameters: ['vehicle-1'],
+        ),
+        [
+          [null],
+        ],
+      );
+      final detailResult = await DuckDbVehicleDetailRepository(reopened)
+          .getVehicleDetail(
+            vehicleId: 'vehicle-1',
+            asOfUtc: DateTime.utc(2026, 8, 22, 12),
+          );
+      final detail = switch (detailResult) {
+        Success<VehicleDetail, VehicleDetailFailure>(value: final value) =>
+          value,
+        _ => throw StateError('Expected persisted vehicle detail'),
+      };
+      final readings = {
+        for (final reading in detail.readings) reading.signal: reading,
+      };
+      expect(readings[VehicleReadingSignal.speed]?.value, 32);
+      expect(readings[VehicleReadingSignal.soc]?.value, 81.8);
+      expect(readings[VehicleReadingSignal.range]?.value, 245.4);
+      expect(
+        readings[VehicleReadingSignal.soc]?.reportedAtUtc,
+        DateTime.utc(2026, 8, 22, 11, 59, 30),
+      );
       await reopened.close();
       if (await file.exists()) await file.delete();
     },
@@ -341,8 +412,10 @@ void main() {
 SyncDeliveryDto _locationDelivery(
   String deliveryId,
   String packetId,
-  DateTime timestamp,
-) => SyncDeliveryDto(
+  DateTime timestamp, {
+  double latitude = 12.9,
+  double longitude = 77.6,
+}) => SyncDeliveryDto(
   deliveryId: deliveryId,
   packet: api.TelemetryPacket(
     packetId: packetId,
@@ -352,10 +425,30 @@ SyncDeliveryDto _locationDelivery(
     value: api.SignalValue(
       kind: api.SignalValueKindEnum.location,
       locationValue: api.LocationValue(
-        latitude: 12.9,
-        longitude: 77.6,
+        latitude: latitude,
+        longitude: longitude,
         accuracyMeters: 10,
       ),
+    ),
+  ),
+);
+
+SyncDeliveryDto _numberDelivery(
+  String deliveryId,
+  String packetId,
+  DateTime timestamp, {
+  required String signalName,
+  required double value,
+}) => SyncDeliveryDto(
+  deliveryId: deliveryId,
+  packet: api.TelemetryPacket(
+    packetId: packetId,
+    vehicleId: 'vehicle-1',
+    eventTimestamp: timestamp,
+    signalName: signalName,
+    value: api.SignalValue(
+      kind: api.SignalValueKindEnum.number,
+      numberValue: value,
     ),
   ),
 );

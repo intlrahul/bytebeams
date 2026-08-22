@@ -6,8 +6,10 @@ final class GeofenceSeed {
   final GeofenceProjector projector;
 
   Future<void> ensure(DatabaseTransaction database) async {
-    final existing = await database.query('SELECT COUNT(*) FROM geofences');
-    if (existing.isNotEmpty && (existing.single.single as num) > 0) return;
+    final existing = await database.query(
+      'SELECT geofence_id FROM geofences ORDER BY geofence_id ASC',
+    );
+    final existingIds = existing.map((row) => row.single! as String).toSet();
     const seeds = [
       ('demo-sarjapur-hub', 'Sarjapur Hub (demo)', 12.9016, 77.6877, 1000.0),
       (
@@ -24,9 +26,26 @@ final class GeofenceSeed {
         77.7499,
         1000.0,
       ),
+      (
+        'demo-peenya-logistics-hub',
+        'Peenya Logistics Hub (demo)',
+        13.0285,
+        77.5197,
+        1000.0,
+      ),
+      (
+        'demo-yelahanka-charging-yard',
+        'Yelahanka Charging Yard (demo)',
+        13.1007,
+        77.5963,
+        1000.0,
+      ),
     ];
     const effectiveFromUtc = '2026-01-01T00:00:00.000Z';
+    var inserted = false;
     for (final seed in seeds) {
+      if (existingIds.contains(seed.$1)) continue;
+      inserted = true;
       await database.execute(
         'INSERT INTO geofences (geofence_id, created_at_utc) VALUES (?, ?)',
         parameters: [seed.$1, effectiveFromUtc],
@@ -45,6 +64,7 @@ final class GeofenceSeed {
         ],
       );
     }
+    if (!inserted) return;
     final vehicles = await database.query(
       'SELECT vehicle_id FROM vehicles ORDER BY vehicle_id ASC',
     );
