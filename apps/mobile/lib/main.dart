@@ -1,7 +1,29 @@
+import 'dart:async';
+
+import 'package:bytebeams/app_runtime.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const ByteBeamsApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await runByteBeamsApp(
+    isAndroidEmulator:
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+    openRuntime: ({required isAndroidEmulator}) =>
+        AppRuntime.open(isAndroidEmulator: isAndroidEmulator),
+    appRunner: runApp,
+  );
+}
+
+Future<void> runByteBeamsApp({
+  required bool isAndroidEmulator,
+  required Future<AppRuntime> Function({required bool isAndroidEmulator})
+  openRuntime,
+  required void Function(Widget app) appRunner,
+}) async {
+  final runtime = await openRuntime(isAndroidEmulator: isAndroidEmulator);
+  appRunner(const ByteBeamsApp());
+  unawaited(runtime.startBackgroundSync());
 }
 
 final class ByteBeamsApp extends StatelessWidget {

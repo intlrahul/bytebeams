@@ -6,8 +6,7 @@ void main() {
     'given_app_started_when_first_frame_rendered_then_shows_product_name',
     (tester) async {
       // Given / When
-      app.main();
-      await tester.pump();
+      await tester.pumpWidget(const app.ByteBeamsApp());
 
       // Then
       expect(find.text('ByteBeams'), findsOneWidget);

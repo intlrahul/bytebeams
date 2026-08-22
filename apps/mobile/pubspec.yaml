@@ -38,6 +38,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   dart_duckdb: 1.2.0
+  dio: ^5.9.0
   freezed_annotation: ^3.1.0
   path: ^1.9.1
   path_provider: ^2.1.6
@@ -69,6 +70,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/migrations/
+    - assets/demo/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -7,6 +7,10 @@ import 'package:bytebeams/core/data/database/duckdb_app_database.dart';
 import 'package:bytebeams/core/time/clock.dart';
 import 'package:bytebeams/features/telemetry/data/duckdb_telemetry_repository.dart';
 import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
+import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
+import 'package:bytebeams/features/sync/data/duckdb_sync_store.dart';
+import 'package:bytebeams/features/sync/data/sync_dto_mapper.dart';
+import 'package:bytebeams_api/bytebeams_api.dart' as api;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -105,6 +109,98 @@ void main() {
             .single
             .validationError,
         'Signal value is invalid',
+      );
+      await reopened.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
+
+  testWidgets(
+    'given_committed_sse_delivery_when_reopened_then_packet_and_cursor_persist',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'milestone_5_sync_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final migrations = await const AssetDatabaseMigrationLoader().load();
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      final store = DuckDbSyncStore(
+        database: database,
+        classifier: TelemetryPacketClassifier(
+          clock: _FixedClock(DateTime.utc(2026)),
+        ),
+      );
+      await database.execute(
+        'INSERT INTO vehicles (vehicle_id, registration_number, model) VALUES (?, ?, ?)',
+        parameters: ['vehicle-1', 'BB-001', 'E-Truck'],
+      );
+      await store.ingestDelivery(
+        SyncDeliveryDto(
+          deliveryId: '100',
+          packet: api.TelemetryPacket(
+            packetId: 'packet-1',
+            vehicleId: 'vehicle-1',
+            eventTimestamp: DateTime.utc(2026),
+            signalName: 'soc',
+            value: api.SignalValue(
+              kind: api.SignalValueKindEnum.number,
+              numberValue: 80,
+            ),
+          ),
+        ),
+      );
+      await store.ingestDelivery(
+        SyncDeliveryDto(
+          deliveryId: '101',
+          packet: api.TelemetryPacket(
+            packetId: 'packet-1',
+            vehicleId: 'vehicle-1',
+            eventTimestamp: DateTime.utc(2026),
+            signalName: 'soc',
+            value: api.SignalValue(
+              kind: api.SignalValueKindEnum.number,
+              numberValue: 80,
+            ),
+          ),
+        ),
+      );
+      await database.close();
+
+      final reopened = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      final reopenedStore = DuckDbSyncStore(
+        database: reopened,
+        classifier: TelemetryPacketClassifier(
+          clock: _FixedClock(DateTime.utc(2026)),
+        ),
+      );
+      expect(await reopenedStore.deliveryCursor(), '101');
+      expect(
+        await reopened.query(
+          'SELECT packet_id FROM telemetry_events WHERE packet_id = ?',
+          parameters: ['packet-1'],
+        ),
+        [
+          ['packet-1'],
+        ],
+      );
+      expect(
+        await reopened.query(
+          'SELECT COUNT(*) FROM telemetry_events WHERE packet_id = ?',
+          parameters: ['packet-1'],
+        ),
+        [
+          [1],
+        ],
       );
       await reopened.close();
       if (await file.exists()) await file.delete();

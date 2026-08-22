@@ -6,7 +6,9 @@ abstract interface class DatabaseMigrationLoader {
 }
 
 final class AssetDatabaseMigrationLoader implements DatabaseMigrationLoader {
-  const AssetDatabaseMigrationLoader();
+  const AssetDatabaseMigrationLoader({this.assetBundle});
+
+  final AssetBundle? assetBundle;
 
   static const _migrationAssets = <({int version, String name, String path})>[
     (
@@ -19,6 +21,11 @@ final class AssetDatabaseMigrationLoader implements DatabaseMigrationLoader {
       name: 'create telemetry foundation',
       path: 'assets/migrations/0002_telemetry_foundation.sql',
     ),
+    (
+      version: 3,
+      name: 'create sync state',
+      path: 'assets/migrations/0003_sync_state.sql',
+    ),
   ];
 
   @override
@@ -28,7 +35,7 @@ final class AssetDatabaseMigrationLoader implements DatabaseMigrationLoader {
         (asset) async => DatabaseMigration(
           version: asset.version,
           name: asset.name,
-          sql: await rootBundle.loadString(asset.path),
+          sql: await (assetBundle ?? rootBundle).loadString(asset.path),
         ),
       ),
     );

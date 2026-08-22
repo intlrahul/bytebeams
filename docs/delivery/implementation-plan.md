@@ -132,7 +132,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 5: mobile ingestion and synchronization
 
-**Status:** `NOT STARTED`
+**Status:** `COMPLETE`
 
 **Goal:** Make DuckDB-backed state converge from bootstrap and SSE while remaining immediately usable offline.
 
@@ -153,7 +153,9 @@ Update status only when repository evidence supports it. A milestone is not comp
 - A failed packet transaction never advances the processed cursor.
 - Killing and relaunching the app restores all successfully ingested knowledge from DuckDB.
 
-**Decisions before implementation:** database-change notification mechanism, reconnect/backoff policy, replay-gap recovery UX, and demo-data replacement policy.
+**Resolved decisions:** publish payload-free `FleetDataCommitted` events asynchronously after successful DuckDB commits; reconnect at 1, 2, 4, 8, then 15 seconds with no jitter; preserve local data on replay gap and offer an explicit backend refresh; and offer explicit packaged demo-data import only after fresh bootstrap failure. Android emulator traffic uses `10.0.2.2`; other local platforms use `localhost`.
+
+**Validation evidence:** Flutter analysis passed. The Flutter unit suite passed with its configured 90% line-coverage gate. The suite includes deterministic HTTP/SSE transport, transactional DuckDB-store, replay-gap, retry, local-first startup, and durable duplicate-delivery behavior tests. Android integration coverage was added for persisted delivery cursor and deduplication.
 
 ## Milestone 6: fleet home vertical slice
 

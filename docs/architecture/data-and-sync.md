@@ -72,7 +72,15 @@ Automatic SSE reconnection uses `Last-Event-ID`. The bootstrap snapshot and curs
 
 For each delivery, atomically persist/deduplicate the packet, update or replay affected projections, and then persist the processed cursor. Never advance the cursor before its packet work commits. A network failure never deletes existing local state.
 
-If the requested cursor predates the bounded backend delivery log, surface an explicit replay-gap outcome; do not silently continue with incomplete history. The recovery UX is an open implementation decision.
+If the requested cursor predates the bounded backend delivery log, surface an explicit replay-gap outcome; do not silently continue with incomplete history. Preserve the local database and expose a degraded state. An explicit **Refresh from server** replaces only backend-synced registry, telemetry, and cursor in one transaction.
+
+### Mobile synchronization decisions
+
+- `AppEventBus` delivers payload-free `FleetDataCommitted` events asynchronously. Consumers always re-query DuckDB after an event.
+- Reconnect delays are deterministic with no jitter: 1, 2, 4, 8, then 15 seconds for every later retry.
+- A fresh install whose bootstrap fails exposes an explicit **Use demo data** action. It imports the packaged fixture through the same transactional store; it never silently replaces server data.
+- The Android emulator endpoint is `http://10.0.2.2:3000`; iOS, web, and local development use `http://localhost:3000`. Endpoint literals are owned only by the endpoint provider.
+- A normal bootstrap upserts its current snapshot and preserves older local retained telemetry. It writes the bootstrap cursor in the same transaction, then SSE resumes using that persisted cursor and `Last-Event-ID`.
 
 ## Database-backed UI updates
 

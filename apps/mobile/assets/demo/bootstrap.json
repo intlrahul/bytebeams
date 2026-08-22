@@ -1,0 +1,16 @@
+{
+  "vehicles": [
+    {"vehicleId": "demo:vehicle-001", "registrationNumber": "DEMO-001", "model": "ByteBeams E-Truck"}
+  ],
+  "telemetry": [
+    {
+      "packetId": "demo:packet-001",
+      "vehicleId": "demo:vehicle-001",
+      "eventTimestamp": "2026-08-21T00:00:00.000Z",
+      "signalName": "soc",
+      "value": {"kind": "number", "numberValue": 75},
+      "serverReceivedAt": "2026-08-21T00:00:00.000Z"
+    }
+  ],
+  "deliveryCursor": "demo-1"
+}
