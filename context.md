@@ -86,6 +86,7 @@ Project identity:
 - Validate `dart_duckdb` persistence and binary support independently on Android, iOS, and web before claiming support. Do not silently replace storage on an unsupported target.
 - **Strict AI execution limit:** do not run Gradle builds, emulator/device workflows, or other long-running scripts/commands. Identify the exact command and expected purpose for the developer to run instead. This limit exists to conserve AI tokens.
 - **Milestone execution workflow:** before implementation, review the milestone plan and produce one concrete checklist of action items, affected tests, documentation, and developer-run validation commands. Wait for approval of that checklist. Once approved, execute every listed action continuously without requesting step-by-step confirmation; return for input only when a new material product, architecture, or scope decision is required.
+- **Non-negotiable approval boundary:** never begin a milestone implementation from a broad request alone. First present the complete action checklist and wait for explicit approval. After that approval, complete every checklist item without asking for “next” or repeated approval. Ask only when a new material product, architecture, or scope decision genuinely prevents safe progress.
 
 ## Open decisions
 
