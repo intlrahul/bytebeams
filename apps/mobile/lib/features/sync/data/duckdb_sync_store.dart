@@ -1,4 +1,5 @@
 import 'package:bytebeams/core/data/database/app_database.dart';
+import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
 import 'package:bytebeams/features/sync/data/sync_dto_mapper.dart';
 import 'package:bytebeams/features/sync/data/sync_queries.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
@@ -18,10 +19,15 @@ abstract interface class SyncStore {
 }
 
 final class DuckDbSyncStore implements SyncStore {
-  const DuckDbSyncStore({required this._database, required this._classifier});
+  const DuckDbSyncStore({
+    required this._database,
+    required this._classifier,
+    this._alertProjector,
+  });
 
   final AppDatabase _database;
   final TelemetryPacketClassifier _classifier;
+  final AlertProjector? _alertProjector;
 
   @override
   Future<String?> deliveryCursor() async {
@@ -53,6 +59,10 @@ final class DuckDbSyncStore implements SyncStore {
     for (final packet in bootstrap.telemetry) {
       await _insertPacket(transaction, packet);
     }
+    await _alertProjector?.rebuild(
+      transaction,
+      bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
+    );
     await transaction.execute(
       upsertSyncCursor,
       parameters: [bootstrap.deliveryCursor],
@@ -78,6 +88,10 @@ final class DuckDbSyncStore implements SyncStore {
         for (final packet in bootstrap.telemetry) {
           await _insertPacket(transaction, packet);
         }
+        await _alertProjector?.rebuild(
+          transaction,
+          bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
+        );
         await transaction.execute(
           upsertSyncCursor,
           parameters: [bootstrap.deliveryCursor],
@@ -91,6 +105,10 @@ final class DuckDbSyncStore implements SyncStore {
         for (final delivery in deliveries) {
           await _insertPacket(transaction, delivery.packet);
         }
+        await _alertProjector?.rebuild(
+          transaction,
+          deliveries.map((delivery) => delivery.packet.vehicleId),
+        );
         final lastDelivery = deliveries.last;
         await transaction.execute(
           upsertSyncCursor,

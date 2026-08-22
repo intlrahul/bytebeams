@@ -5,6 +5,7 @@ import 'package:bytebeams/core/data/database/database_path_provider.dart';
 import 'package:bytebeams/core/diagnostics/app_dio_factory.dart';
 import 'package:bytebeams/core/diagnostics/app_logger.dart';
 import 'package:bytebeams/core/time/clock.dart';
+import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:bytebeams/features/sync/data/api_endpoint_provider.dart';
 import 'package:bytebeams/features/sync/data/demo_data_importer.dart';
@@ -64,6 +65,7 @@ final class AppRuntime {
       store: DuckDbSyncStore(
         database: database,
         classifier: const TelemetryPacketClassifier(clock: clock),
+        alertProjector: const DuckDbAlertProjector(clock: clock),
       ),
       demoDataImporter: const AssetDemoDataImporter(),
       eventBus: eventBus,

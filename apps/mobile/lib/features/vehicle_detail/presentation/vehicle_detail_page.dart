@@ -1,6 +1,7 @@
 import 'package:bytebeams/core/design/sparkee/sparkee_components.dart';
 import 'package:bytebeams/core/design/sparkee/sparkee_color_tokens.dart';
 import 'package:bytebeams/core/design/sparkee/sparkee_spacing.dart';
+import 'package:bytebeams/features/alerts/domain/alert_models.dart';
 import 'package:bytebeams/features/vehicle_detail/domain/vehicle_detail_models.dart';
 import 'package:bytebeams/features/vehicle_detail/presentation/vehicle_detail_bloc.dart';
 import 'package:flutter/material.dart';
@@ -48,6 +49,20 @@ final class _VehicleDetailView extends StatelessWidget {
           children: [
             Text(detail.model, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: SparkeeSpacing.lg),
+            if (state.alerts.isNotEmpty) ...[
+              Text('Attention', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: SparkeeSpacing.sm),
+              ...state.alerts.map(
+                (alert) => _AlertCard(
+                  alert: alert,
+                  onDismiss: (reason) => _dismiss(context, alert, reason),
+                  onUndo: () => context.read<VehicleDetailBloc>().add(
+                    VehicleDetailAlertUndoRequested(alert.alertId),
+                  ),
+                ),
+              ),
+              const SizedBox(height: SparkeeSpacing.lg),
+            ],
             Text('Readings', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: SparkeeSpacing.sm),
             ...detail.readings.map(
@@ -78,7 +93,80 @@ final class _VehicleDetailView extends StatelessWidget {
       );
     },
   );
+
+  Future<void> _dismiss(
+    BuildContext context,
+    VehicleAlert alert,
+    AlertDismissalReason reason,
+  ) async {
+    context.read<VehicleDetailBloc>().add(
+      VehicleDetailAlertDismissRequested(alert.alertId, reason),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SparkeeFeedback.undo(
+        onUndo: () => context.read<VehicleDetailBloc>().add(
+          VehicleDetailAlertUndoRequested(alert.alertId),
+        ),
+      ),
+    );
+  }
 }
+
+final class _AlertCard extends StatelessWidget {
+  const _AlertCard({
+    required this.alert,
+    required this.onDismiss,
+    required this.onUndo,
+  });
+  final VehicleAlert alert;
+  final ValueChanged<AlertDismissalReason> onDismiss;
+  final VoidCallback onUndo;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      leading: Icon(
+        alert.severity == AlertSeverity.critical
+            ? Icons.error_outline
+            : Icons.warning_amber_outlined,
+        color: alert.severity == AlertSeverity.critical
+            ? SparkeeColors.critical
+            : SparkeeColors.warning,
+      ),
+      title: Text(_alertTitle(alert)),
+      subtitle: Text(alert.severity.name.toUpperCase()),
+      trailing: alert.isDismissed
+          ? TextButton(onPressed: onUndo, child: const Text('UNDO'))
+          : TextButton(
+              onPressed: () async {
+                final reason = await showModalBottomSheet<AlertDismissalReason>(
+                  context: context,
+                  builder: (context) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: AlertDismissalReason.values
+                          .map(
+                            (reason) => ListTile(
+                              title: Text(reason.label),
+                              onTap: () => Navigator.pop(context, reason),
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                  ),
+                );
+                if (reason != null) onDismiss(reason);
+              },
+              child: const Text('Dismiss'),
+            ),
+    ),
+  );
+}
+
+String _alertTitle(VehicleAlert alert) => switch (alert.type) {
+  AlertType.lowBattery => 'Low battery',
+  AlertType.batteryOverheating => 'Battery overheating',
+};
 
 final class _ReadingRow extends StatelessWidget {
   const _ReadingRow({required this.reading, required this.asOfUtc});

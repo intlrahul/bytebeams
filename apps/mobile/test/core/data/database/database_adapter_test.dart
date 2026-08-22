@@ -14,16 +14,18 @@ void main() {
         'assets/migrations/0001_schema_migrations.sql': 'one',
         'assets/migrations/0002_telemetry_foundation.sql': 'two',
         'assets/migrations/0003_sync_state.sql': 'three',
+        'assets/migrations/0004_alerts.sql': 'four',
       }),
     );
 
     final migrations = await loader.load();
 
-    expect(migrations.map((migration) => migration.version), [1, 2, 3]);
+    expect(migrations.map((migration) => migration.version), [1, 2, 3, 4]);
     expect(migrations.map((migration) => migration.sql), [
       'one',
       'two',
       'three',
+      'four',
     ]);
   });
 

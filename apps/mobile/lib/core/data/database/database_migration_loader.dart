@@ -26,6 +26,11 @@ final class AssetDatabaseMigrationLoader implements DatabaseMigrationLoader {
       name: 'create sync state',
       path: 'assets/migrations/0003_sync_state.sql',
     ),
+    (
+      version: 4,
+      name: 'create alert episodes',
+      path: 'assets/migrations/0004_alerts.sql',
+    ),
   ];
 
   @override

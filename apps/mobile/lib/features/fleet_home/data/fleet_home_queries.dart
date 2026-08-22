@@ -38,8 +38,10 @@ derived AS (
            WHEN s.ignition IS TRUE THEN 'idle'
            ELSE 'stopped'
          END AS status,
-         (CASE WHEN s.soc_at >= ? AND s.soc < 20 THEN 1 ELSE 0 END) +
-         (CASE WHEN s.battery_temp_at >= ? AND s.battery_temp > 45 THEN 1 ELSE 0 END) AS attention_count
+         (SELECT COUNT(*) FROM alert_episodes a
+          WHERE a.vehicle_id = v.vehicle_id
+            AND a.resolved_at_utc IS NULL
+            AND a.dismissed_at_utc IS NULL) AS attention_count
   FROM vehicles v
   LEFT JOIN signals s ON s.vehicle_id = v.vehicle_id
 )

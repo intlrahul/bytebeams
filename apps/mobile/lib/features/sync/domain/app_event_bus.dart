@@ -14,6 +14,10 @@ final class FleetDataCommitted extends AppEvent {
   const FleetDataCommitted();
 }
 
+final class AlertStateChanged extends AppEvent {
+  const AlertStateChanged();
+}
+
 /// Delivers application-wide events asynchronously so a database commit can
 /// complete before listening features re-query their local state.
 final class AsyncAppEventBus implements AppEventBus {

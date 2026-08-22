@@ -61,7 +61,7 @@ final class _Database implements AppDatabase {
   Future<void> close() async => log.add('database.close');
 
   @override
-  Future<int> currentSchemaVersion() async => 3;
+  Future<int> currentSchemaVersion() async => 4;
 
   @override
   Future<void> execute(

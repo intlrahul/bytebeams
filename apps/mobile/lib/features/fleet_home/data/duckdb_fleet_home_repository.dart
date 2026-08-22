@@ -21,13 +21,7 @@ final class DuckDbFleetHomeRepository implements FleetHomeRepository {
           .toIso8601String();
       final rows = await _database.query(
         FleetHomeQueries.selectRows,
-        parameters: [
-          freshnessBoundary,
-          freshnessBoundary,
-          freshnessBoundary,
-          filter.name,
-          filter.name,
-        ],
+        parameters: [freshnessBoundary, filter.name, filter.name],
       );
       final counts = await _database.query(
         FleetHomeQueries.selectCounts,

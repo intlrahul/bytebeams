@@ -36,7 +36,11 @@ Low battery is one logical episode whose severity is Warning for `10 <= SOC < 20
 - Warning → Critical: retain logical episode, escalate severity, and override a Warning dismissal.
 - Staleness removes the ability to claim `NORMAL` or `ALERT`; it does not fabricate a clearing value.
 
-Define deterministic episode and occurrence identities before schema implementation. Replay/upsert must not duplicate episodes.
+Episode identity is `vehicle_id:alert_type:opened_packet_id`, where the opening
+packet is the first fresh valid reading that makes the condition active. The
+projection upserts this identity inside the telemetry transaction, so duplicate
+packets cannot create another episode. A fresh valid clearing reading resolves
+the active episode; stale readings leave it unchanged.
 
 ## Dismissal and Undo
 

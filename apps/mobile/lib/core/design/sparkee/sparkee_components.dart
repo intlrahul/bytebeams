@@ -20,6 +20,14 @@ final class SparkeeAppScaffold extends StatelessWidget {
   );
 }
 
+abstract final class SparkeeFeedback {
+  static SnackBar undo({required VoidCallback onUndo}) => SnackBar(
+    content: const Text('Alert dismissed'),
+    duration: const Duration(seconds: 5),
+    action: SnackBarAction(label: 'UNDO', onPressed: onUndo),
+  );
+}
+
 final class SparkeeStatusChip extends StatelessWidget {
   const SparkeeStatusChip({required this.status, super.key});
   final SparkeeStatus status;

@@ -103,8 +103,9 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
     on<FleetHomeSyncStateChanged>(_onSyncStateChanged);
     on<FleetHomeDemoDataRequested>(_onDemoDataRequested);
     _eventSubscription = eventBus.events
-        .where((event) => event is FleetDataCommitted)
-        .cast<FleetDataCommitted>()
+        .where(
+          (event) => event is FleetDataCommitted || event is AlertStateChanged,
+        )
         .listen((_) => add(const FleetHomeDataCommitted()));
     _syncSubscription = syncRepository.states.listen(
       (syncState) => add(FleetHomeSyncStateChanged(syncState)),
@@ -114,7 +115,7 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
 
   final GetFleetHome getFleetHome;
   final UseDemoData useDemoData;
-  late final StreamSubscription<FleetDataCommitted> _eventSubscription;
+  late final StreamSubscription<AppEvent> _eventSubscription;
   late final StreamSubscription<SyncState> _syncSubscription;
 
   Future<void> _onRefresh(

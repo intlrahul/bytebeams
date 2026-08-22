@@ -218,7 +218,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 8: alerts vertical slice
 
-**Status:** `NOT STARTED`
+**Status:** `IN PROGRESS`
 
 **Goal:** Produce durable alert episodes with escalation, dismissal, resolution, and Undo behavior.
 
@@ -237,7 +237,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 - BLoCs re-query DuckDB after relevant app-level events.
 - Unit, DuckDB integration, BLoC, widget, and end-to-end tests pass.
 
-**Decisions before implementation:** alert-history UI extent and exact wall-clock presentation around Undo expiry.
+**Resolved decisions:** Vehicle Detail provides actionable alerts; Fleet Home provides only the persisted non-dismissed count. Durable alert history is queryable but has no dedicated UI in this milestone. Dismissal uses the ordered reason sheet and a five-second Sparkee Undo snackbar; on return from background/restart, Undo is available only while its persisted wall-clock expiry remains valid.
 
 ## Milestone 9: geofences vertical slice
 

@@ -1,5 +1,8 @@
 import 'package:bytebeams/app_runtime.dart';
 import 'package:bytebeams/core/time/clock.dart';
+import 'package:bytebeams/features/alerts/data/duckdb_alert_repository.dart';
+import 'package:bytebeams/features/alerts/domain/alert_repository.dart';
+import 'package:bytebeams/features/alerts/domain/alert_use_cases.dart';
 import 'package:bytebeams/features/fleet_home/data/duckdb_fleet_home_repository.dart';
 import 'package:bytebeams/features/fleet_home/domain/fleet_home_repository.dart';
 import 'package:bytebeams/features/fleet_home/domain/get_fleet_home.dart';
@@ -26,6 +29,27 @@ final class AppDependencies {
         ),
       )
       ..registerSingleton(UseDemoData(repository: runtime.syncRepository))
+      ..registerSingleton<AlertRepository>(
+        DuckDbAlertRepository(runtime.database),
+      )
+      ..registerSingleton(
+        GetVehicleAlerts(
+          repository: _services<AlertRepository>(),
+          clock: const SystemClock(),
+        ),
+      )
+      ..registerSingleton(
+        DismissAlert(
+          repository: _services<AlertRepository>(),
+          clock: const SystemClock(),
+        ),
+      )
+      ..registerSingleton(
+        UndoAlertDismissal(
+          repository: _services<AlertRepository>(),
+          clock: const SystemClock(),
+        ),
+      )
       ..registerSingleton<VehicleDetailRepository>(
         DuckDbVehicleDetailRepository(runtime.database),
       )
@@ -53,6 +77,9 @@ final class AppDependencies {
       VehicleDetailBloc(
         vehicleId: vehicleId,
         getVehicleDetail: _services<GetVehicleDetail>(),
+        getVehicleAlerts: _services<GetVehicleAlerts>(),
+        dismissAlert: _services<DismissAlert>(),
+        undoAlertDismissal: _services<UndoAlertDismissal>(),
         eventBus: _services<AppRuntime>().eventBus,
       );
 }

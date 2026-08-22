@@ -33,7 +33,7 @@ final class _Database implements AppDatabase {
   @override
   Future<void> close() async {}
   @override
-  Future<int> currentSchemaVersion() async => 3;
+  Future<int> currentSchemaVersion() async => 4;
   @override
   Future<void> execute(
     String sql, {

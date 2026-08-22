@@ -26,7 +26,7 @@ void main() {
     expect(snapshot.rows.single.attentionCount, 1);
     expect(snapshot.counts.moving, 1);
     expect(database.parameters.first.first, '2026-08-22T11:50:00.000Z');
-    expect(database.parameters.first.skip(3), [
+    expect(database.parameters.first.skip(1), [
       FleetFilter.all.name,
       FleetFilter.all.name,
     ]);
@@ -40,7 +40,7 @@ void main() {
       await DuckDbFleetHomeRepository(database)
           .getFleet(filter: FleetFilter.offline, asOfUtc: asOf);
 
-      expect(database.parameters.first.skip(3), [
+      expect(database.parameters.first.skip(1), [
         FleetFilter.offline.name,
         FleetFilter.offline.name,
       ]);
