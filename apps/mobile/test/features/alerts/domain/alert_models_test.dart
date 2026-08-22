@@ -26,6 +26,32 @@ void main() {
   });
 
   test(
+    'given_undismissed_or_missing_expiry_when_undo_checked_then_returns_false',
+    () {
+      final openedAt = DateTime.utc(2026, 8, 22, 12);
+      final undismissed = VehicleAlert(
+        alertId: 'alert-1',
+        vehicleId: 'vehicle-1',
+        type: AlertType.lowBattery,
+        severity: AlertSeverity.warning,
+        openedAtUtc: openedAt,
+        undoExpiresAtUtc: openedAt.add(const Duration(seconds: 5)),
+      );
+      final missingExpiry = VehicleAlert(
+        alertId: 'alert-2',
+        vehicleId: 'vehicle-1',
+        type: AlertType.batteryOverheating,
+        severity: AlertSeverity.critical,
+        openedAtUtc: openedAt,
+        dismissedAtUtc: openedAt,
+      );
+
+      expect(undismissed.canUndoAt(openedAt), isFalse);
+      expect(missingExpiry.canUndoAt(openedAt), isFalse);
+    },
+  );
+
+  test(
     'given_alert_failures_when_created_then_exposes_documented_variants',
     () {
       expect(

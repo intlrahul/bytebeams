@@ -1,5 +1,6 @@
 import 'package:bytebeams/core/data/database/app_database.dart';
 import 'package:bytebeams/core/time/clock.dart';
+import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
 import 'package:bytebeams/features/sync/data/duckdb_sync_store.dart';
 import 'package:bytebeams/features/sync/data/sync_dto_mapper.dart';
 import 'package:bytebeams/features/sync/data/sync_queries.dart';
@@ -194,12 +195,63 @@ void main() {
 
     expect(database.executions, isEmpty);
   });
+
+  test(
+    'given_bootstrap_when_imported_then_rebuilds_alerts_for_registry_vehicles',
+    () async {
+      final database = _Database();
+      final projector = _AlertProjector();
+      final store = _store(database, alertProjector: projector);
+
+      await store.importBootstrap(
+        const SyncBootstrapDto(
+          vehicles: [
+            Vehicle(
+              vehicleId: 'vehicle-1',
+              registrationNumber: 'BB-001',
+              model: 'E-Truck',
+            ),
+            Vehicle(
+              vehicleId: 'vehicle-2',
+              registrationNumber: 'BB-002',
+              model: 'E-Truck',
+            ),
+          ],
+          telemetry: [],
+          deliveryCursor: '20',
+        ),
+        origin: 'backend',
+      );
+
+      expect(projector.vehicleIdBatches, [
+        ['vehicle-1', 'vehicle-2'],
+      ]);
+    },
+  );
+
+  test('given_delivery_batch_when_ingested_then_rebuilds_alerts_for_affected_vehicles', () async {
+    final database = _Database();
+    final projector = _AlertProjector();
+    final store = _store(database, alertProjector: projector);
+
+    await store.ingestDeliveries([
+      SyncDeliveryDto(deliveryId: '21', packet: _packet('soc', _number(15))),
+      SyncDeliveryDto(deliveryId: '22', packet: _packet('speed', _number(1))),
+    ]);
+
+    expect(projector.vehicleIdBatches, [
+      ['vehicle-1', 'vehicle-1'],
+    ]);
+    expect(database.executions.last.parameters, ['22']);
+  });
 }
 
-DuckDbSyncStore _store(_Database database) => DuckDbSyncStore(
-  database: database,
-  classifier: TelemetryPacketClassifier(clock: const _Clock()),
-);
+DuckDbSyncStore _store(_Database database, {AlertProjector? alertProjector}) =>
+    DuckDbSyncStore(
+      database: database,
+      classifier: TelemetryPacketClassifier(clock: const _Clock()),
+      alertProjector: alertProjector,
+    );
 
 api.SignalValue _number(double value) =>
     api.SignalValue(kind: api.SignalValueKindEnum.number, numberValue: value);
@@ -225,6 +277,18 @@ final class _Execution {
 
   final String sql;
   final List<Object?> parameters;
+}
+
+final class _AlertProjector implements AlertProjector {
+  final vehicleIdBatches = <List<String>>[];
+
+  @override
+  Future<void> rebuild(
+    DatabaseTransaction database,
+    Iterable<String> vehicleIds,
+  ) async {
+    vehicleIdBatches.add(vehicleIds.toList());
+  }
 }
 
 final class _Database implements AppDatabase {

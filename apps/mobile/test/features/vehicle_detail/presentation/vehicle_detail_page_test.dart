@@ -46,6 +46,31 @@ void main() {
   );
 
   testWidgets(
+    'given_empty_history_when_rendered_then_shows_empty_history_state',
+    (tester) async {
+      final events = AsyncAppEventBus();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SparkeeTheme.light(),
+          home: VehicleDetailPage(
+            createBloc: () => VehicleDetailBloc(
+              vehicleId: 'vehicle-1',
+              getVehicleDetail: GetVehicleDetail(
+                repository: const _EmptyHistoryRepository(),
+                clock: const _Clock(),
+              ),
+              eventBus: events,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('No SOC history'), findsOneWidget);
+      await events.close();
+    },
+  );
+
+  testWidgets(
     'given_active_alert_when_rendered_then_dismissal_reasons_are_ordered',
     (tester) async {
       final events = AsyncAppEventBus();
@@ -167,4 +192,22 @@ final class _Alerts implements AlertRepository {
     dismissed = false;
     return const Result.success(null);
   }
+}
+
+final class _EmptyHistoryRepository implements VehicleDetailRepository {
+  const _EmptyHistoryRepository();
+  @override
+  Future<VehicleDetailResult> getVehicleDetail({
+    required String vehicleId,
+    required DateTime asOfUtc,
+  }) async => Result.success(
+    VehicleDetail(
+      vehicleId: vehicleId,
+      registrationNumber: 'BB-002',
+      model: 'E-Truck',
+      asOfUtc: asOfUtc,
+      readings: const [],
+      socHistory: const [],
+    ),
+  );
 }

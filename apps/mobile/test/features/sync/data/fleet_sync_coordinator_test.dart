@@ -285,8 +285,95 @@ void main() {
     await coordinator.synchronize();
     await Future<void>.delayed(Duration.zero);
 
-    expect(states.last, const SyncState.degraded(SyncPersistenceUnavailable()));
+    expect(
+      coordinator.currentState,
+      const SyncState.degraded(SyncPersistenceUnavailable()),
+    );
 
+    await subscription.cancel();
+    await coordinator.close();
+    await bus.close();
+  });
+
+  test('given_local_fleet_check_fails_after_bootstrap_failure_then_reports_persistence_failure', () async {
+    final states = <SyncState>[];
+    final bus = AsyncAppEventBus();
+    final coordinator = FleetSyncCoordinator(
+      remote: _BootstrapFailureRemote(),
+      store: _Store(failFleetCheck: true),
+      demoDataImporter: _DemoImporter(),
+      eventBus: bus,
+    );
+    final subscription = coordinator.states.listen(states.add);
+
+    await coordinator.synchronize();
+
+    expect(
+      coordinator.currentState,
+      const SyncState.degraded(SyncPersistenceUnavailable()),
+    );
+    await subscription.cancel();
+    await coordinator.close();
+    await bus.close();
+  });
+
+  test('given_refresh_or_demo_import_failure_when_requested_then_reports_typed_failure', () async {
+    final states = <SyncState>[];
+    final bus = AsyncAppEventBus();
+    final coordinator = FleetSyncCoordinator(
+      remote: _BootstrapFailureRemote(),
+      store: _Store(),
+      demoDataImporter: _DemoImporter(
+        failure: const SyncBootstrapUnavailable(),
+      ),
+      eventBus: bus,
+    );
+    final subscription = coordinator.states.listen(states.add);
+
+    await coordinator.refreshFromServer();
+    expect(
+      coordinator.currentState,
+      const SyncState.degraded(SyncBootstrapUnavailable()),
+    );
+    await coordinator.useDemoData();
+    expect(
+      coordinator.currentState,
+      const SyncState.degraded(SyncBootstrapUnavailable()),
+    );
+
+    await subscription.cancel();
+    await coordinator.close();
+    await bus.close();
+  });
+
+  test('given_delivery_persistence_failure_when_batch_retried_then_requeues_without_cursor_loss', () async {
+    final states = <SyncState>[];
+    final deliveries = StreamController<SyncDeliveryDto>();
+    final scheduler = _ManualBatchScheduler();
+    final store = _Store()..remainingIngestFailures = 1;
+    final bus = AsyncAppEventBus();
+    final coordinator = FleetSyncCoordinator(
+      remote: _LiveRemote(deliveries.stream),
+      store: store,
+      demoDataImporter: _DemoImporter(),
+      eventBus: bus,
+      batchScheduler: scheduler,
+    );
+    final subscription = coordinator.states.listen(states.add);
+
+    await coordinator.synchronize();
+    deliveries.add(_delivery);
+    await Future<void>.delayed(Duration.zero);
+    scheduler.fireAll();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(states.last, const SyncState.degraded(SyncPersistenceUnavailable()));
+    expect(store.ingestedDeliveryIds, isEmpty);
+    scheduler.fireAll();
+    await Future<void>.delayed(Duration.zero);
+    expect(store.ingestedDeliveryIds, ['6']);
+
+    await deliveries.close();
     await subscription.cancel();
     await coordinator.close();
     await bus.close();
@@ -337,19 +424,28 @@ final class _LiveRemote extends _Remote {
 }
 
 final class _Store implements SyncStore {
-  _Store({this.hasFleetData = false, this.failImport = false});
+  _Store({
+    this.hasFleetData = false,
+    this.failImport = false,
+    this.failFleetCheck = false,
+  });
 
   final importedOrigins = <String>[];
   final ingestedDeliveryIds = <String>[];
   final bool hasFleetData;
   final bool failImport;
+  final bool failFleetCheck;
+  int remainingIngestFailures = 0;
   int replacements = 0;
 
   @override
   Future<String?> deliveryCursor() async => '5';
 
   @override
-  Future<bool> hasUsableFleetData() async => hasFleetData;
+  Future<bool> hasUsableFleetData() async {
+    if (failFleetCheck) throw StateError('database unavailable');
+    return hasFleetData;
+  }
 
   @override
   Future<void> importBootstrap(
@@ -364,6 +460,10 @@ final class _Store implements SyncStore {
 
   @override
   Future<void> ingestDeliveries(List<SyncDeliveryDto> deliveries) async {
+    if (remainingIngestFailures > 0) {
+      remainingIngestFailures -= 1;
+      throw StateError('database unavailable');
+    }
     ingestedDeliveryIds.addAll(
       deliveries.map((delivery) => delivery.deliveryId),
     );
@@ -409,14 +509,21 @@ final class _ManualBatchTimer implements SyncBatchTimer {
 }
 
 final class _DemoImporter implements DemoDataImporter {
+  _DemoImporter({this.failure});
+
+  final SyncFailure? failure;
+
   @override
-  Future<SyncBootstrapDto> load() => Future.value(
-    const SyncBootstrapDto(
-      vehicles: [],
-      telemetry: [],
-      deliveryCursor: 'demo-1',
-    ),
-  );
+  Future<SyncBootstrapDto> load() {
+    if (failure case final configured?) return Future.error(configured);
+    return Future.value(
+      const SyncBootstrapDto(
+        vehicles: [],
+        telemetry: [],
+        deliveryCursor: 'demo-1',
+      ),
+    );
+  }
 }
 
 final class _NeverCompletingRetryScheduler implements SyncRetryScheduler {
