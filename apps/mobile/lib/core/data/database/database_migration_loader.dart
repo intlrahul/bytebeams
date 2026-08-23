@@ -41,6 +41,11 @@ final class AssetDatabaseMigrationLoader implements DatabaseMigrationLoader {
       name: 'create automatic trips',
       path: 'assets/migrations/0006_trips.sql',
     ),
+    (
+      version: 7,
+      name: 'create retention replay checkpoints',
+      path: 'assets/migrations/0007_retention_replay_checkpoints.sql',
+    ),
   ];
 
   @override

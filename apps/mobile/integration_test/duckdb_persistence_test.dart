@@ -1,12 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:bytebeams/core/data/database/app_database.dart';
 import 'package:bytebeams/core/data/database/database_migration.dart';
+import 'package:bytebeams/core/data/database/database_failure.dart';
 import 'package:bytebeams/core/data/database/database_migration_loader.dart';
 import 'package:bytebeams/core/data/database/database_path_provider.dart';
 import 'package:bytebeams/core/data/database/duckdb_app_database.dart';
 import 'package:bytebeams/core/time/clock.dart';
 import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
+import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
+import 'package:bytebeams/features/sync/data/projection_rebuild_service.dart';
+import 'package:bytebeams/features/sync/data/retention_cleanup.dart';
 import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
 import 'package:bytebeams/features/telemetry/data/duckdb_telemetry_repository.dart';
 import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
@@ -19,8 +24,379 @@ import 'package:bytebeams_api/bytebeams_api.dart' as api;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
+import '../test/support/retention_seed_factory.dart';
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets(
+    'given_schema_six_when_reopened_with_schema_seven_then_adds_replay_checkpoints',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'milestone_11_migration_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final migrations = await const AssetDatabaseMigrationLoader().load();
+      final versionSix = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations
+            .where((migration) => migration.version <= 6)
+            .toList(),
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      await versionSix.close();
+
+      final upgraded = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      expect(await upgraded.currentSchemaVersion(), 7);
+      expect(
+        await upgraded.query(
+          'SELECT COUNT(*) FROM geofence_replay_checkpoints',
+        ),
+        [
+          [0],
+        ],
+      );
+      await upgraded.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
+
+  testWidgets(
+    'given_retention_boundaries_when_cleanup_reopens_then_keeps_boundary_and_derived_history',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'milestone_11_retention_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final migrations = await const AssetDatabaseMigrationLoader().load();
+      final now = DateTime.utc(2026, 8, 22, 12);
+      final cutoff = now.subtract(const Duration(days: 30));
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(now),
+      );
+      for (final row in [
+        ['valid-boundary', 'supportedValid', cutoff, cutoff],
+        [
+          'invalid-expired',
+          'supportedInvalid',
+          cutoff.subtract(const Duration(seconds: 1)),
+          now,
+        ],
+        [
+          'unsupported-expired',
+          'unsupported',
+          cutoff.subtract(const Duration(seconds: 1)),
+          now,
+        ],
+        [
+          'quarantine-boundary',
+          'quarantined',
+          cutoff.subtract(const Duration(days: 1)),
+          cutoff,
+        ],
+        [
+          'quarantine-expired',
+          'quarantined',
+          cutoff.subtract(const Duration(days: 1)),
+          cutoff.subtract(const Duration(seconds: 1)),
+        ],
+      ]) {
+        await database.execute(
+          'INSERT INTO telemetry_events (packet_id, vehicle_id, event_timestamp_utc, client_received_at_utc, signal_name, classification, raw_value_json) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          parameters: [
+            row[0],
+            'vehicle-1',
+            (row[2] as DateTime).toIso8601String(),
+            (row[3] as DateTime).toIso8601String(),
+            'soc',
+            row[1],
+            '{}',
+          ],
+        );
+      }
+      await database.execute(
+        'INSERT INTO geofence_transitions (transition_id, vehicle_id, geofence_id, geofence_version, transition_type, event_timestamp_utc, packet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        parameters: [
+          'historical-transition',
+          'vehicle-1',
+          'site-a',
+          1,
+          'exit',
+          cutoff.subtract(const Duration(days: 1)).toIso8601String(),
+          'expired-location',
+        ],
+      );
+      await database.transaction<void>(
+        (transaction) =>
+            DuckDbRetentionCleanup(clock: _FixedClock(now))
+                .runIfDue(transaction),
+      );
+      await database.close();
+
+      final reopened = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: migrations,
+        clock: _FixedClock(now),
+      );
+      expect(
+        await reopened.query(
+          'SELECT packet_id FROM telemetry_events ORDER BY packet_id',
+        ),
+        [
+          ['quarantine-boundary'],
+          ['valid-boundary'],
+        ],
+      );
+      expect(
+        await reopened.query('SELECT transition_id FROM geofence_transitions'),
+        [
+          ['historical-transition'],
+        ],
+      );
+      await reopened.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
+
+  testWidgets(
+    'given_test_failure_before_commit_when_retention_runs_then_rolls_back_packet_marker_and_cursor',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'milestone_11_rollback_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: await const AssetDatabaseMigrationLoader().load(),
+        clock: _FixedClock(DateTime.utc(2026)),
+      );
+      await expectLater(
+        database.transaction<void>((transaction) async {
+          await transaction.execute(
+            "INSERT INTO sync_state (key, value) VALUES ('delivery_cursor', 'new')",
+          );
+          await const _FailingRetentionCleanup().runIfDue(transaction);
+        }),
+        throwsA(isA<DatabaseOperationFailure>()),
+      );
+      expect(
+        await database.query(
+          "SELECT value FROM sync_state WHERE key = 'delivery_cursor'",
+        ),
+        isEmpty,
+      );
+      await database.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
+
+  testWidgets(
+    'given_late_duplicate_locations_across_cleanup_when_rebuilt_then_transitions_and_trip_are_stable',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'milestone_11_replay_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final now = DateTime.utc(2026, 8, 22, 12);
+      final cutoff = now.subtract(const Duration(days: 30));
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: await const AssetDatabaseMigrationLoader().load(),
+        clock: _FixedClock(now),
+      );
+      await database.execute(
+        'INSERT INTO vehicles VALUES (?, ?, ?)',
+        parameters: ['vehicle-1', 'RT-001', 'Retention Truck'],
+      );
+      await database.execute(
+        'INSERT INTO geofences VALUES (?, ?)',
+        parameters: ['site-a', DateTime.utc(2026)],
+      );
+      await database.execute(
+        'INSERT INTO geofence_versions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        parameters: [
+          'site-a',
+          1,
+          'Test Site',
+          12.9,
+          77.6,
+          1000.0,
+          true,
+          DateTime.utc(2026),
+          null,
+        ],
+      );
+      Future<void> location(String id, DateTime at, double longitude) =>
+          database.execute(
+            'INSERT INTO telemetry_events (packet_id, vehicle_id, event_timestamp_utc, client_received_at_utc, signal_name, classification, raw_value_json, latitude, longitude, accuracy_meters) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            parameters: [
+              id,
+              'vehicle-1',
+              at,
+              now,
+              'location',
+              'supportedValid',
+              '{}',
+              12.9,
+              longitude,
+              10.0,
+            ],
+          );
+      await location(
+        'old-in-1',
+        cutoff.subtract(const Duration(days: 2)),
+        77.6,
+      );
+      await location(
+        'old-in-2',
+        cutoff.subtract(const Duration(days: 2, minutes: -1)),
+        77.6,
+      );
+      await location(
+        'old-out-1',
+        cutoff.subtract(const Duration(days: 1)),
+        77.7,
+      );
+      await location(
+        'old-out-2',
+        cutoff.subtract(const Duration(days: 1, minutes: -1)),
+        77.7,
+      );
+      await location('recent-in-1', cutoff.add(const Duration(hours: 1)), 77.6);
+      await location(
+        'recent-in-2',
+        cutoff.add(const Duration(hours: 1, minutes: 1)),
+        77.6,
+      );
+      await database.transaction<void>((transaction) async {
+        await const DuckDbGeofenceProjector().rebuild(transaction, [
+          'vehicle-1',
+        ]);
+        await const DuckDbTripProjector().rebuild(transaction, ['vehicle-1']);
+      });
+      final transitionsBefore = await database.query(
+        'SELECT transition_id FROM geofence_transitions ORDER BY transition_id',
+      );
+      final tripsBefore = await database.query(
+        'SELECT trip_id, status FROM trips ORDER BY trip_id',
+      );
+      await database.transaction<void>(
+        (transaction) =>
+            DuckDbRetentionCleanup(clock: _FixedClock(now))
+                .runIfDue(transaction),
+      );
+      await location(
+        'late-outside',
+        cutoff.add(const Duration(minutes: 30)),
+        77.7,
+      );
+      await database.transaction<void>((transaction) async {
+        await const DuckDbGeofenceProjector().rebuild(transaction, [
+          'vehicle-1',
+        ]);
+        await const DuckDbTripProjector().rebuild(transaction, ['vehicle-1']);
+      });
+
+      expect(
+        await database.query(
+          'SELECT transition_id FROM geofence_transitions ORDER BY transition_id',
+        ),
+        transitionsBefore,
+      );
+      expect(
+        await database.query(
+          'SELECT trip_id, status FROM trips ORDER BY trip_id',
+        ),
+        tripsBefore,
+      );
+      await database.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
+
+  testWidgets(
+    'given_representative_backlog_when_cleaned_and_rebuilt_then_meets_android_budgets',
+    (tester) async {
+      const provider = ApplicationSupportDatabasePathProvider(
+        fileName: 'milestone_11_performance_probe.duckdb',
+      );
+      final path = await provider.databasePath();
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+      final now = DateTime.utc(2026, 8, 22, 12);
+      final database = await DuckDbAppDatabase.open(
+        path: path,
+        migrations: await const AssetDatabaseMigrationLoader().load(),
+        clock: _FixedClock(now),
+      );
+      final deliveries = RetentionSeedFactory.deliveries(
+        startUtc: now.subtract(const Duration(days: 31)),
+      );
+      await DuckDbSyncStore(
+        database: database,
+        classifier: TelemetryPacketClassifier(clock: _FixedClock(now)),
+      ).importBootstrap(
+        SyncBootstrapDto(
+          vehicles: RetentionSeedFactory.vehicles(),
+          telemetry: deliveries.map((delivery) => delivery.packet).toList(),
+          deliveryCursor: '10000',
+        ),
+        origin: 'performance',
+      );
+      await database.execute(
+        "UPDATE telemetry_events SET classification = 'supportedValid'",
+      );
+      await database.execute('CHECKPOINT');
+      final bytesBefore = await file.length();
+      final cleanupWatch = Stopwatch()..start();
+      await database.transaction<void>(
+        (transaction) =>
+            DuckDbRetentionCleanup(clock: _FixedClock(now))
+                .runIfDue(transaction),
+      );
+      cleanupWatch.stop();
+      final rebuildWatch = Stopwatch()..start();
+      await database.transaction<void>(
+        (transaction) =>
+            DuckDbProjectionRebuildService(
+              alertProjector: DuckDbAlertProjector(clock: _FixedClock(now)),
+              geofenceProjector: const DuckDbGeofenceProjector(),
+              tripProjector: const DuckDbTripProjector(),
+            ).rebuild(
+              transaction,
+              RetentionSeedFactory.vehicles().map(
+                (vehicle) => vehicle.vehicleId,
+              ),
+            ),
+      );
+      rebuildWatch.stop();
+      await database.execute('CHECKPOINT');
+      final bytesAfter = await file.length();
+      // Aggregate measurements contain no telemetry payloads.
+      // ignore: avoid_print
+      print(
+        'M11 cleanup_ms=${cleanupWatch.elapsedMilliseconds} rebuild_ms=${rebuildWatch.elapsedMilliseconds} db_before=$bytesBefore db_after=$bytesAfter',
+      );
+      expect(cleanupWatch.elapsed, lessThan(const Duration(seconds: 3)));
+      expect(rebuildWatch.elapsed, lessThan(const Duration(seconds: 5)));
+      await database.close();
+      if (await file.exists()) await file.delete();
+    },
+  );
 
   testWidgets(
     'given_confirmed_exit_and_entry_when_reopened_then_retains_one_completed_trip',
@@ -524,6 +900,18 @@ final class _FixedClock implements Clock {
 
   @override
   DateTime nowUtc() => value;
+}
+
+final class _FailingRetentionCleanup implements RetentionCleanup {
+  const _FailingRetentionCleanup();
+
+  @override
+  Future<void> runIfDue(DatabaseTransaction database) async {
+    await database.execute(
+      "INSERT INTO sync_state (key, value) VALUES ('retention_cleanup_utc_day', '2026-01-01')",
+    );
+    throw StateError('Injected retention failure');
+  }
 }
 
 const _schemaSql = '''

@@ -17,6 +17,7 @@ void main() {
         'assets/migrations/0004_alerts.sql': 'four',
         'assets/migrations/0005_geofences.sql': 'five',
         'assets/migrations/0006_trips.sql': 'six',
+        'assets/migrations/0007_retention_replay_checkpoints.sql': 'seven',
       }),
     );
 
@@ -29,6 +30,7 @@ void main() {
       4,
       5,
       6,
+      7,
     ]);
     expect(migrations.map((migration) => migration.sql), [
       'one',
@@ -37,6 +39,7 @@ void main() {
       'four',
       'five',
       'six',
+      'seven',
     ]);
   });
 

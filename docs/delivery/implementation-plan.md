@@ -295,7 +295,7 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 ## Milestone 11: retention and replay hardening
 
-**Status:** `NOT STARTED`
+**Status:** `COMPLETE`
 
 **Goal:** Prove correctness under prolonged, adversarial telemetry delivery and cleanup.
 
@@ -314,7 +314,9 @@ Update status only when repository evidence supports it. A milestone is not comp
 - Projection rebuilds reproduce the same state from the same retained inputs.
 - Performance and database-size measurements are recorded for representative data.
 
-**Decisions before implementation:** cleanup trigger/schedule, replay locking strategy, and performance budgets.
+**Resolved decisions:** Run cleanup at most once per UTC day after a successful writer transaction. Cleanup runs after packet persistence and projection rebuilds, in the same serialized transaction; a cleanup failure rolls back the entire write, including the cursor. Android targets are cleanup under 3 seconds and projection rebuild under 5 seconds for the representative dataset; record database size before and after cleanup without a fixed reduction target.
+
+**Validation evidence:** Flutter formatting, analysis, generated-code freshness, and the full unit/widget suite passed with 93.79% line coverage. Android integration tests passed for migration 6→7, exact retention boundaries, close/reopen durability, rollback injection, historical-transition preservation, and stable late/reordered replay. The 500-vehicle/10,000-delivery Android harness measured 18 ms cleanup and 89 ms projection rebuild, within the approved 3-second and 5-second budgets; database size was recorded as 2,895,872 bytes before and 4,730,880 bytes after cleanup/checkpoint.
 
 ## Milestone 12: demo readiness
 

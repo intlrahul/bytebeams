@@ -16,6 +16,7 @@ import 'package:bytebeams/features/sync/data/duckdb_sync_store.dart';
 import 'package:bytebeams/features/sync/data/fleet_remote_data_source.dart';
 import 'package:bytebeams/features/sync/data/fleet_sync_coordinator.dart';
 import 'package:bytebeams/features/sync/data/local_first_sync_bootstrapper.dart';
+import 'package:bytebeams/features/sync/data/retention_cleanup.dart';
 import 'package:bytebeams/features/sync/domain/app_event_bus.dart';
 import 'package:bytebeams/features/sync/domain/sync_repository.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
@@ -76,6 +77,7 @@ final class AppRuntime {
         alertProjector: const DuckDbAlertProjector(clock: clock),
         geofenceProjector: geofenceProjector,
         tripProjector: const DuckDbTripProjector(),
+        retentionCleanup: const DuckDbRetentionCleanup(clock: clock),
       ),
       demoDataImporter: const AssetDemoDataImporter(),
       eventBus: eventBus,

@@ -2,6 +2,8 @@ import 'package:bytebeams/core/data/database/app_database.dart';
 import 'package:bytebeams/core/time/clock.dart';
 import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
 import 'package:bytebeams/features/sync/data/duckdb_sync_store.dart';
+import 'package:bytebeams/features/sync/data/projection_rebuild_service.dart';
+import 'package:bytebeams/features/sync/data/retention_cleanup.dart';
 import 'package:bytebeams/features/sync/data/sync_dto_mapper.dart';
 import 'package:bytebeams/features/sync/data/sync_queries.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
@@ -235,9 +237,30 @@ void main() {
     ]);
 
     expect(projector.vehicleIdBatches, [
-      ['vehicle-1', 'vehicle-1'],
+      ['vehicle-1'],
     ]);
     expect(database.executions.last.parameters, ['22']);
+  });
+
+  test('given_cleanup_failure_when_delivery_ingested_then_rolls_back_and_does_not_advance_cursor', () async {
+    final database = _Database();
+    final calls = <String>[];
+    final store = DuckDbSyncStore(
+      database: database,
+      classifier: TelemetryPacketClassifier(clock: const _Clock()),
+      projectionRebuildService: _Rebuild(calls),
+      retentionCleanup: _FailingCleanup(calls),
+    );
+
+    await expectLater(
+      store.ingestDelivery(
+        SyncDeliveryDto(deliveryId: '23', packet: _packet('soc', _number(80))),
+      ),
+      throwsStateError,
+    );
+
+    expect(calls, ['rebuild', 'cleanup']);
+    expect(database.executions, isEmpty);
   });
 }
 
@@ -283,6 +306,28 @@ final class _AlertProjector implements AlertProjector {
     Iterable<String> vehicleIds,
   ) async {
     vehicleIdBatches.add(vehicleIds.toList());
+  }
+}
+
+final class _Rebuild implements ProjectionRebuildService {
+  _Rebuild(this.calls);
+  final List<String> calls;
+
+  @override
+  Future<void> rebuild(
+    DatabaseTransaction database,
+    Iterable<String> vehicleIds,
+  ) async => calls.add('rebuild');
+}
+
+final class _FailingCleanup implements RetentionCleanup {
+  _FailingCleanup(this.calls);
+  final List<String> calls;
+
+  @override
+  Future<void> runIfDue(DatabaseTransaction database) async {
+    calls.add('cleanup');
+    throw StateError('cleanup failed');
   }
 }
 

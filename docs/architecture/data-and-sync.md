@@ -122,6 +122,8 @@ Every authoritative read goes through DuckDB-backed repositories. An in-memory a
 
 Cleanup must not race an unfinished replay. Process eligible events and preserve derived history before deleting expired raw data.
 
+Before cleanup, persist the confirmed geofence state at the retention boundary in `geofence_replay_checkpoints`. Later replay preserves older transitions and rebuilds only from that checkpoint through retained raw locations. See ADR 0003.
+
 ## Demo backend
 
 The TypeScript backend stores a small, bounded SQLite delivery log, survives restart, and produces deterministic fixtures for normal, delayed, out-of-order, duplicate, missing-interval, and backlog behavior. It is transport, not fleet truth.

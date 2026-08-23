@@ -62,6 +62,27 @@ void main() {
     await const DuckDbGeofenceProjector().rebuild(secondInside, ['vehicle-1']);
     expect(_membership(secondInside).$2[1], 'a');
   });
+
+  test('given_retention_checkpoint_when_rebuilt_then_preserves_older_transitions_and_replays_from_checkpoint', () async {
+    final database = _Database(checkpoint: true, simulationStep: 4);
+
+    await const DuckDbGeofenceProjector().rebuild(database, ['vehicle-1']);
+
+    expect(
+      database.executed
+          .firstWhere(
+            (entry) => entry.$1.startsWith('DELETE FROM geofence_transitions'),
+          )
+          .$1,
+      contains('checkpoint_at_utc'),
+    );
+    expect(
+      database.executed.where(
+        (entry) => entry.$1.contains('INSERT INTO geofence_transitions'),
+      ),
+      hasLength(1),
+    );
+  });
 }
 
 (String, List<Object?>) _membership(_Database database) => database.executed
@@ -71,9 +92,14 @@ void main() {
     .single;
 
 final class _Database implements AppDatabase {
-  _Database({this.versionChange = false, this.simulationStep});
+  _Database({
+    this.versionChange = false,
+    this.simulationStep,
+    this.checkpoint = false,
+  });
   final bool versionChange;
   final int? simulationStep;
+  final bool checkpoint;
   final queries = <String>[];
   final executed = <(String, List<Object?>)>[];
   @override
@@ -129,6 +155,13 @@ final class _Database implements AppDatabase {
         ['a', 1, 12.9, 77.6, 1000.0, true, DateTime.utc(2026), null],
         ['b', 1, 13.0, 77.7, 500.0, true, DateTime.utc(2026), null],
       ];
+    }
+    if (sql.contains('FROM geofence_replay_checkpoints')) {
+      return checkpoint
+          ? [
+              ['vehicle-1', null, null, DateTime.utc(2026, 8, 22, 12, 2)],
+            ]
+          : const [];
     }
     if (sql.contains('FROM telemetry_events')) {
       if (simulationStep case final step?) {

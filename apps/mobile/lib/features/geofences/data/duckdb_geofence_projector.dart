@@ -37,20 +37,36 @@ final class DuckDbGeofenceProjector implements GeofenceProjector {
       );
       (byVehicle[location.vehicleId] ??= []).add(location);
     }
+    final checkpointRows = await database.query(
+      _checkpointsQuery(ids.length),
+      parameters: ids,
+    );
+    final checkpoints = <String, _ReplayCheckpoint>{
+      for (final row in checkpointRows)
+        row[0]! as String: _ReplayCheckpoint.fromRow(row.sublist(1), versions),
+    };
+    await database.execute(
+      _deleteReplayableTransitions(ids.length),
+      parameters: ids,
+    );
+    await database.execute(
+      'DELETE FROM vehicle_geofence_memberships WHERE vehicle_id IN (${List.filled(ids.length, '?').join(', ')})',
+      parameters: ids,
+    );
+    await database.execute(
+      'DELETE FROM geofence_transition_candidates WHERE vehicle_id IN (${List.filled(ids.length, '?').join(', ')})',
+      parameters: ids,
+    );
     for (final id in ids) {
-      await database.execute(
-        'DELETE FROM geofence_transitions WHERE vehicle_id = ?',
-        parameters: [id],
+      final checkpoint = checkpoints[id];
+      await _rebuildVehicle(
+        database,
+        id,
+        byVehicle[id] ?? const [],
+        versions,
+        initialTarget: checkpoint?.target,
+        hasInitialBaseline: checkpoint != null,
       );
-      await database.execute(
-        'DELETE FROM vehicle_geofence_memberships WHERE vehicle_id = ?',
-        parameters: [id],
-      );
-      await database.execute(
-        'DELETE FROM geofence_transition_candidates WHERE vehicle_id = ?',
-        parameters: [id],
-      );
-      await _rebuildVehicle(database, id, byVehicle[id] ?? const [], versions);
     }
   }
 
@@ -58,11 +74,13 @@ final class DuckDbGeofenceProjector implements GeofenceProjector {
     DatabaseTransaction database,
     String vehicleId,
     List<_Location> locations,
-    List<GeofenceVersionRecord> versions,
-  ) async {
-    _Target? confirmed;
+    List<GeofenceVersionRecord> versions, {
+    required _Target? initialTarget,
+    required bool hasInitialBaseline,
+  }) async {
+    var confirmed = initialTarget;
     _Candidate? candidate;
-    var hasBaseline = false;
+    var hasBaseline = hasInitialBaseline;
     _Location? lastDecisive;
     for (final location in locations) {
       final target = _targetFor(location, versions);
@@ -244,6 +262,52 @@ WHERE vehicle_id IN (${List.filled(vehicleCount, '?').join(', ')})
 ORDER BY vehicle_id ASC, event_timestamp_utc ASC,
          server_received_at_utc ASC NULLS LAST, packet_id ASC
 ''';
+
+  String _checkpointsQuery(int vehicleCount) =>
+      '''
+SELECT vehicle_id, geofence_id, geofence_version, checkpoint_at_utc
+FROM geofence_replay_checkpoints
+WHERE vehicle_id IN (${List.filled(vehicleCount, '?').join(', ')})
+''';
+
+  String _deleteReplayableTransitions(int vehicleCount) =>
+      '''
+DELETE FROM geofence_transitions AS transition
+WHERE transition.vehicle_id IN (${List.filled(vehicleCount, '?').join(', ')})
+  AND (
+    NOT EXISTS (
+      SELECT 1 FROM geofence_replay_checkpoints AS checkpoint
+      WHERE checkpoint.vehicle_id = transition.vehicle_id
+    )
+    OR transition.event_timestamp_utc >= (
+      SELECT checkpoint_at_utc FROM geofence_replay_checkpoints AS checkpoint
+      WHERE checkpoint.vehicle_id = transition.vehicle_id
+    )
+  )
+''';
+}
+
+final class _ReplayCheckpoint {
+  const _ReplayCheckpoint(this.target, this.atUtc);
+
+  factory _ReplayCheckpoint.fromRow(
+    List<Object?> row,
+    List<GeofenceVersionRecord> versions,
+  ) {
+    final geofenceId = row[0] as String?;
+    final version = row[1] as int?;
+    final target = geofenceId == null
+        ? const _Target.outside()
+        : _Target(
+            versions.singleWhere(
+              (item) => item.id == geofenceId && item.version == version,
+            ),
+          );
+    return _ReplayCheckpoint(target, row[2]! as DateTime);
+  }
+
+  final _Target target;
+  final DateTime atUtc;
 }
 
 final class _Target {

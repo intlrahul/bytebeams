@@ -3,6 +3,8 @@ import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
 import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
 import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
 import 'package:bytebeams/features/sync/data/sync_dto_mapper.dart';
+import 'package:bytebeams/features/sync/data/retention_cleanup.dart';
+import 'package:bytebeams/features/sync/data/projection_rebuild_service.dart';
 import 'package:bytebeams/features/sync/data/sync_queries.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_packet_classifier.dart';
 import 'package:bytebeams/features/telemetry/data/telemetry_queries.dart';
@@ -27,6 +29,8 @@ final class DuckDbSyncStore implements SyncStore {
     this._alertProjector,
     this._geofenceProjector,
     this._tripProjector,
+    this.retentionCleanup,
+    this.projectionRebuildService,
   });
 
   final AppDatabase _database;
@@ -34,6 +38,8 @@ final class DuckDbSyncStore implements SyncStore {
   final AlertProjector? _alertProjector;
   final GeofenceProjector? _geofenceProjector;
   final TripProjector? _tripProjector;
+  final RetentionCleanup? retentionCleanup;
+  final ProjectionRebuildService? projectionRebuildService;
 
   @override
   Future<String?> deliveryCursor() async {
@@ -54,18 +60,17 @@ final class DuckDbSyncStore implements SyncStore {
   }) => _database.transaction((transaction) async {
     await _upsertVehicles(transaction, bootstrap.vehicles);
     await _insertPackets(transaction, bootstrap.telemetry);
-    await _alertProjector?.rebuild(
-      transaction,
-      bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
-    );
-    await _geofenceProjector?.rebuild(
-      transaction,
-      bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
-    );
-    await _tripProjector?.rebuild(
-      transaction,
-      bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
-    );
+    await (projectionRebuildService ??
+            DuckDbProjectionRebuildService(
+              alertProjector: _alertProjector,
+              geofenceProjector: _geofenceProjector,
+              tripProjector: _tripProjector,
+            ))
+        .rebuild(
+          transaction,
+          bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
+        );
+    await retentionCleanup?.runIfDue(transaction);
     await transaction.execute(
       upsertSyncCursor,
       parameters: [bootstrap.deliveryCursor],
@@ -80,18 +85,17 @@ final class DuckDbSyncStore implements SyncStore {
         await transaction.execute(deleteBackendSyncedVehicles);
         await _upsertVehicles(transaction, bootstrap.vehicles);
         await _insertPackets(transaction, bootstrap.telemetry);
-        await _alertProjector?.rebuild(
-          transaction,
-          bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
-        );
-        await _geofenceProjector?.rebuild(
-          transaction,
-          bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
-        );
-        await _tripProjector?.rebuild(
-          transaction,
-          bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
-        );
+        await (projectionRebuildService ??
+                DuckDbProjectionRebuildService(
+                  alertProjector: _alertProjector,
+                  geofenceProjector: _geofenceProjector,
+                  tripProjector: _tripProjector,
+                ))
+            .rebuild(
+              transaction,
+              bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
+            );
+        await retentionCleanup?.runIfDue(transaction);
         await transaction.execute(
           upsertSyncCursor,
           parameters: [bootstrap.deliveryCursor],
@@ -105,18 +109,17 @@ final class DuckDbSyncStore implements SyncStore {
         for (final delivery in deliveries) {
           await _insertPacket(transaction, delivery.packet);
         }
-        await _alertProjector?.rebuild(
-          transaction,
-          deliveries.map((delivery) => delivery.packet.vehicleId),
-        );
-        await _geofenceProjector?.rebuild(
-          transaction,
-          deliveries.map((delivery) => delivery.packet.vehicleId),
-        );
-        await _tripProjector?.rebuild(
-          transaction,
-          deliveries.map((delivery) => delivery.packet.vehicleId),
-        );
+        await (projectionRebuildService ??
+                DuckDbProjectionRebuildService(
+                  alertProjector: _alertProjector,
+                  geofenceProjector: _geofenceProjector,
+                  tripProjector: _tripProjector,
+                ))
+            .rebuild(
+              transaction,
+              deliveries.map((delivery) => delivery.packet.vehicleId),
+            );
+        await retentionCleanup?.runIfDue(transaction);
         final lastDelivery = deliveries.last;
         await transaction.execute(
           upsertSyncCursor,

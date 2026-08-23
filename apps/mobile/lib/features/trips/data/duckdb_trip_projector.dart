@@ -15,14 +15,23 @@ final class DuckDbTripProjector implements TripProjector {
     DatabaseTransaction database,
     Iterable<String> vehicleIds,
   ) async {
-    for (final vehicleId in vehicleIds.toSet()) {
-      await database.execute(
-        'DELETE FROM trips WHERE vehicle_id = ?',
-        parameters: [vehicleId],
-      );
-      final rows = await database.query(_transitions, parameters: [vehicleId]);
+    final ids = vehicleIds.toSet().toList(growable: false);
+    if (ids.isEmpty) return;
+    await database.execute(
+      'DELETE FROM trips WHERE vehicle_id IN (${List.filled(ids.length, '?').join(', ')})',
+      parameters: ids,
+    );
+    final rows = await database.query(
+      _transitions(ids.length),
+      parameters: ids,
+    );
+    final byVehicle = <String, List<List<Object?>>>{};
+    for (final row in rows) {
+      (byVehicle[row[1]! as String] ??= []).add(row);
+    }
+    for (final vehicleId in ids) {
       _OpenTrip? active;
-      for (final row in rows) {
+      for (final row in byVehicle[vehicleId] ?? const []) {
         final type = row[5]! as String;
         if (type == 'exit' && active == null) {
           active = _OpenTrip.fromRow(row);
@@ -57,9 +66,11 @@ final class DuckDbTripProjector implements TripProjector {
     ],
   );
 
-  static const _transitions = '''
+  String _transitions(int vehicleCount) =>
+      '''
 SELECT transition_id, vehicle_id, geofence_id, geofence_version, event_timestamp_utc, transition_type, packet_id
-FROM geofence_transitions WHERE vehicle_id = ?
+FROM geofence_transitions
+WHERE vehicle_id IN (${List.filled(vehicleCount, '?').join(', ')})
 ORDER BY event_timestamp_utc ASC, CASE transition_type WHEN 'exit' THEN 0 ELSE 1 END ASC, packet_id ASC, transition_id ASC
 ''';
 }
