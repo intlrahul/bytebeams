@@ -4,6 +4,7 @@ import 'package:bytebeams/features/trips/presentation/trips_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:bytebeams/core/design/sparkee/sparkee_spacing.dart';
 
 final class TripsPage extends StatelessWidget {
   const TripsPage({required this.createBloc, this.vehicleId, super.key});
@@ -30,10 +31,13 @@ final class _TripsView extends StatelessWidget {
           : Column(
               children: [
                 Wrap(
+                  spacing: SparkeeSpacing.sm,
+                  runSpacing: SparkeeSpacing.xs,
+                  alignment: WrapAlignment.center,
                   children: [
                     for (final status in TripStatus.values)
-                      FilterChip(
-                        label: Text(status.name),
+                      SparkeeOptionChip(
+                        label: status.label,
                         selected: state.status == status,
                         onSelected: (_) => context.read<TripsBloc>().add(
                           TripsFilterChanged(
@@ -54,16 +58,12 @@ final class _TripsView extends StatelessWidget {
                           itemCount: state.trips.length,
                           itemBuilder: (_, index) {
                             final trip = state.trips[index];
-                            return ListTile(
+                            return SparkeeListCard(
                               title: Text(trip.registrationNumber),
                               subtitle: Text(
                                 '${trip.origin} → ${trip.destination ?? 'Awaiting destination'}',
                               ),
-                              trailing: Text(
-                                trip.status == TripStatus.inProgress
-                                    ? 'IN PROGRESS'
-                                    : 'COMPLETED',
-                              ),
+                              trailing: Text(trip.status.label),
                               onTap: () => context.push('/trips/${trip.id}'),
                             );
                           },

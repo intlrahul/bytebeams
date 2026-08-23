@@ -50,13 +50,13 @@ final class _FleetHomeView extends StatelessWidget {
           return SparkeeAppScaffold(
             title: 'Fleet',
             actions: [
-              IconButton(
-                icon: const Icon(Icons.fence_outlined),
+              SparkeeIconButton(
+                icon: Icons.fence_outlined,
                 tooltip: 'Geofences',
                 onPressed: () => context.push('/geofences'),
               ),
-              IconButton(
-                icon: const Icon(Icons.route_outlined),
+              SparkeeIconButton(
+                icon: Icons.route_outlined,
                 tooltip: 'Trips',
                 onPressed: () => context.push('/trips'),
               ),

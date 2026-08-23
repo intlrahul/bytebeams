@@ -2,6 +2,13 @@ import 'package:bytebeams/features/telemetry/domain/telemetry_models.dart';
 
 enum TripStatus { inProgress, completed }
 
+extension TripStatusPresentation on TripStatus {
+  String get label => switch (this) {
+    TripStatus.inProgress => 'In progress',
+    TripStatus.completed => 'Completed',
+  };
+}
+
 final class Trip {
   const Trip({
     required this.id,

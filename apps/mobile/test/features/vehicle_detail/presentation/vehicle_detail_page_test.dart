@@ -38,7 +38,7 @@ void main() {
 
       expect(find.text('BB-001'), findsOneWidget);
       expect(find.text('SOC'), findsOneWidget);
-      expect(find.text('ALERT'), findsOneWidget);
+      expect(find.text('Alert'), findsOneWidget);
       expect(find.text('Range'), findsOneWidget);
       expect(find.text('—'), findsOneWidget);
       expect(find.text('SOC history — last 24 hours'), findsOneWidget);
@@ -156,6 +156,65 @@ void main() {
       await tester.tap(find.text('I am on it'));
       await tester.pump();
       expect(find.text('Alert dismissed'), findsOneWidget);
+      await events.close();
+    },
+  );
+
+  testWidgets(
+    'given_alert_feedback_when_route_changes_then_it_does_not_follow_the_user',
+    (tester) async {
+      final events = AsyncAppEventBus();
+      final alerts = _Alerts();
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => VehicleDetailPage(
+              createBloc: () => VehicleDetailBloc(
+                vehicleId: 'vehicle-1',
+                getVehicleDetail: GetVehicleDetail(
+                  repository: const _Repository(),
+                  clock: const _Clock(),
+                ),
+                getVehicleAlerts: GetVehicleAlerts(
+                  repository: alerts,
+                  clock: const _Clock(),
+                ),
+                dismissAlert: DismissAlert(
+                  repository: alerts,
+                  clock: const _Clock(),
+                ),
+                undoAlertDismissal: UndoAlertDismissal(
+                  repository: alerts,
+                  clock: const _Clock(),
+                ),
+                eventBus: events,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/other',
+            builder: (_, _) => const Scaffold(body: Text('Other screen')),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp.router(theme: SparkeeTheme.light(), routerConfig: router),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Dismiss'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('I am on it'));
+      await tester.pump();
+      expect(find.text('Alert dismissed'), findsOneWidget);
+
+      router.push('/other');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Other screen'), findsOneWidget);
+      expect(find.text('Alert dismissed'), findsNothing);
       await events.close();
     },
   );

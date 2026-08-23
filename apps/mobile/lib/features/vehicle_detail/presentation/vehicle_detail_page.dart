@@ -58,11 +58,14 @@ final class _VehicleDetailView extends StatelessWidget {
               Text('Attention', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: SparkeeSpacing.sm),
               ...state.alerts.map(
-                (alert) => _AlertCard(
-                  alert: alert,
-                  onDismiss: (reason) => _dismiss(context, alert, reason),
-                  onUndo: () => context.read<VehicleDetailBloc>().add(
-                    VehicleDetailAlertUndoRequested(alert.alertId),
+                (alert) => Builder(
+                  builder: (feedbackContext) => _AlertCard(
+                    alert: alert,
+                    onDismiss: (reason) =>
+                        _dismiss(feedbackContext, alert, reason),
+                    onUndo: () => context.read<VehicleDetailBloc>().add(
+                      VehicleDetailAlertUndoRequested(alert.alertId),
+                    ),
                   ),
                 ),
               ),
@@ -81,7 +84,7 @@ final class _VehicleDetailView extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               ...detail.recentTrips.map(
-                (trip) => ListTile(
+                (trip) => SparkeeListCard(
                   title: Text(
                     '${trip.origin} → ${trip.destination ?? 'Awaiting destination'}',
                   ),
@@ -89,10 +92,10 @@ final class _VehicleDetailView extends StatelessWidget {
                 ),
               ),
               if (detail.hasMoreTrips)
-                TextButton(
+                SparkeeTextButton(
                   onPressed: () =>
                       context.push('/trips?vehicleId=${detail.vehicleId}'),
-                  child: const Text('View all trips'),
+                  label: 'View all trips',
                 ),
             ],
             const SizedBox(height: SparkeeSpacing.lg),
@@ -109,7 +112,7 @@ final class _VehicleDetailView extends StatelessWidget {
               )
             else
               ...detail.socHistory.map(
-                (point) => ListTile(
+                (point) => SparkeeListCard(
                   title: Text('${_number(point.soc)}%'),
                   trailing: Text(_timestamp(point.eventTimestampUtc)),
                 ),
@@ -149,43 +152,41 @@ final class _AlertCard extends StatelessWidget {
   final VoidCallback onUndo;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      leading: Icon(
-        alert.severity == AlertSeverity.critical
-            ? Icons.error_outline
-            : Icons.warning_amber_outlined,
-        color: alert.severity == AlertSeverity.critical
-            ? SparkeeColors.critical
-            : SparkeeColors.warning,
-      ),
-      title: Text(_alertTitle(alert)),
-      subtitle: Text(alert.severity.name.toUpperCase()),
-      trailing: alert.isDismissed
-          ? TextButton(onPressed: onUndo, child: const Text('UNDO'))
-          : TextButton(
-              onPressed: () async {
-                final reason = await showModalBottomSheet<AlertDismissalReason>(
-                  context: context,
-                  builder: (context) => SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: AlertDismissalReason.values
-                          .map(
-                            (reason) => ListTile(
-                              title: Text(reason.label),
-                              onTap: () => Navigator.pop(context, reason),
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
-                  ),
-                );
-                if (reason != null) onDismiss(reason);
-              },
-              child: const Text('Dismiss'),
-            ),
+  Widget build(BuildContext context) => SparkeeListCard(
+    leading: Icon(
+      alert.severity == AlertSeverity.critical
+          ? Icons.error_outline
+          : Icons.warning_amber_outlined,
+      color: alert.severity == AlertSeverity.critical
+          ? SparkeeColors.critical
+          : SparkeeColors.warning,
     ),
+    title: Text(_alertTitle(alert)),
+    subtitle: Text(alert.severity.name.toUpperCase()),
+    trailing: alert.isDismissed
+        ? SparkeeTextButton(label: 'Undo', onPressed: onUndo)
+        : SparkeeTextButton(
+            label: 'Dismiss',
+            onPressed: () async {
+              final reason = await showModalBottomSheet<AlertDismissalReason>(
+                context: context,
+                builder: (context) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: AlertDismissalReason.values
+                        .map(
+                          (reason) => SparkeeListCard(
+                            title: Text(reason.label),
+                            onTap: () => Navigator.pop(context, reason),
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
+                ),
+              );
+              if (reason != null) onDismiss(reason);
+            },
+          ),
   );
 }
 
@@ -201,22 +202,20 @@ final class _ReadingRow extends StatelessWidget {
   final DateTime asOfUtc;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      title: Text(_label(reading.signal)),
-      subtitle: reading.reportedAtUtc == null
-          ? null
-          : Text('${_age(reading.reportedAtUtc!, asOfUtc)} ago'),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(_value(reading), style: Theme.of(context).textTheme.titleMedium),
-          if (reading.verdict != null) ...[
-            const SizedBox(width: SparkeeSpacing.sm),
-            _VerdictPill(verdict: reading.verdict!),
-          ],
+  Widget build(BuildContext context) => SparkeeListCard(
+    title: Text(_label(reading.signal)),
+    subtitle: reading.reportedAtUtc == null
+        ? null
+        : Text('${_age(reading.reportedAtUtc!, asOfUtc)} ago'),
+    trailing: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(_value(reading), style: Theme.of(context).textTheme.titleMedium),
+        if (reading.verdict != null) ...[
+          const SizedBox(width: SparkeeSpacing.sm),
+          _VerdictPill(verdict: reading.verdict!),
         ],
-      ),
+      ],
     ),
   );
 }
@@ -233,12 +232,9 @@ final class _VerdictPill extends StatelessWidget {
       VehicleReadingVerdict.alert => SparkeeColors.warning,
       VehicleReadingVerdict.stale => SparkeeColors.stale,
     };
-    return Semantics(
-      label: 'Reading verdict: ${verdict.name.toUpperCase()}',
-      child: Chip(
-        label: Text(verdict.name.toUpperCase()),
-        labelStyle: TextStyle(color: color),
-      ),
+    return SparkeeStatusPill(
+      label: verdict.name[0].toUpperCase() + verdict.name.substring(1),
+      color: color,
     );
   }
 }

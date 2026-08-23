@@ -15,7 +15,7 @@ void main() {
 
       expect(find.text('BB-1'), findsOneWidget);
       expect(find.text('Hub → Depot'), findsOneWidget);
-      expect(find.text('Completed'), findsOneWidget);
+      expect(find.text('Completed'), findsNWidgets(2));
     },
   );
 

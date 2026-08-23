@@ -63,31 +63,29 @@ final class _GeofenceCard extends StatelessWidget {
   const _GeofenceCard({required this.geofence});
   final Geofence geofence;
   @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      title: Text(geofence.displayName),
-      subtitle: Text(
-        '${geofence.radiusMeters.round()} m • ${geofence.vehicleCount} vehicles${geofence.isActive ? '' : ' • inactive'}',
-      ),
-      trailing: geofence.isActive
-          ? PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'edit') {
-                  _openForm(context, geofence: geofence);
-                }
-                if (value == 'deactivate') {
-                  context.read<GeofenceBloc>().add(
-                    GeofenceDeactivated(geofence.id),
-                  );
-                }
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'edit', child: Text('Edit')),
-                PopupMenuItem(value: 'deactivate', child: Text('Deactivate')),
-              ],
-            )
-          : null,
+  Widget build(BuildContext context) => SparkeeListCard(
+    title: Text(geofence.displayName),
+    subtitle: Text(
+      '${geofence.radiusMeters.round()} m • ${geofence.vehicleCount} vehicles${geofence.isActive ? '' : ' • inactive'}',
     ),
+    trailing: geofence.isActive
+        ? SparkeeMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'edit') {
+                _openForm(context, geofence: geofence);
+              }
+              if (value == 'deactivate') {
+                context.read<GeofenceBloc>().add(
+                  GeofenceDeactivated(geofence.id),
+                );
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('Edit')),
+              PopupMenuItem(value: 'deactivate', child: Text('Deactivate')),
+            ],
+          )
+        : null,
   );
 }
 
@@ -110,7 +108,7 @@ final class _GeofenceForm extends StatefulWidget {
 
 final class _GeofenceFormState extends State<_GeofenceForm> {
   late final TextEditingController _name = TextEditingController(
-    text: widget.geofence?.displayName.replaceAll(' (demo)', '') ?? '',
+    text: widget.geofence?.displayName ?? '',
   );
   late final TextEditingController _latitude = TextEditingController(
     text: widget.geofence?.latitude.toString() ?? '',
@@ -146,30 +144,27 @@ final class _GeofenceFormState extends State<_GeofenceForm> {
             widget.geofence == null ? 'Add geofence' : 'Edit geofence',
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          TextField(
-            controller: _name,
-            decoration: const InputDecoration(labelText: 'Name'),
-          ),
-          TextField(
+          SparkeeTextField(controller: _name, label: 'Name'),
+          SparkeeTextField(
             controller: _latitude,
+            label: 'Latitude',
             keyboardType: const TextInputType.numberWithOptions(
               decimal: true,
               signed: true,
             ),
-            decoration: const InputDecoration(labelText: 'Latitude'),
           ),
-          TextField(
+          SparkeeTextField(
             controller: _longitude,
+            label: 'Longitude',
             keyboardType: const TextInputType.numberWithOptions(
               decimal: true,
               signed: true,
             ),
-            decoration: const InputDecoration(labelText: 'Longitude'),
           ),
-          TextField(
+          SparkeeTextField(
             controller: _radius,
+            label: 'Radius (m)',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Radius (m)'),
           ),
           const SizedBox(height: SparkeeSpacing.md),
           SparkeePrimaryButton(

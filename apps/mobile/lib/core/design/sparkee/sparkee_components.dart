@@ -16,9 +16,11 @@ final class SparkeeAppScaffold extends StatelessWidget {
   final Widget body;
   final List<Widget>? actions;
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(title), actions: actions),
-    body: body,
+  Widget build(BuildContext context) => ScaffoldMessenger(
+    child: Scaffold(
+      appBar: AppBar(title: Text(title), actions: actions),
+      body: body,
+    ),
   );
 }
 
@@ -102,6 +104,153 @@ final class SparkeeFilterChip extends StatelessWidget {
       label: Text('$label ($count)'),
       selected: selected,
       onSelected: onSelected,
+    ),
+  );
+}
+
+final class SparkeeOptionChip extends StatelessWidget {
+  const SparkeeOptionChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+    super.key,
+  });
+
+  final String label;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '$label filter',
+    button: true,
+    selected: selected,
+    child: FilterChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: onSelected,
+    ),
+  );
+}
+
+final class SparkeeListCard extends StatelessWidget {
+  const SparkeeListCard({
+    required this.title,
+    this.subtitle,
+    this.leading,
+    this.trailing,
+    this.onTap,
+    super.key,
+  });
+
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? leading;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      leading: leading,
+      title: title,
+      subtitle: subtitle,
+      trailing: trailing,
+      onTap: onTap,
+    ),
+  );
+}
+
+final class SparkeeTextButton extends StatelessWidget {
+  const SparkeeTextButton({
+    required this.label,
+    required this.onPressed,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    button: true,
+    child: TextButton(onPressed: onPressed, child: Text(label)),
+  );
+}
+
+final class SparkeeTextField extends StatelessWidget {
+  const SparkeeTextField({
+    required this.controller,
+    required this.label,
+    this.keyboardType,
+    super.key,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final TextInputType? keyboardType;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    keyboardType: keyboardType,
+    decoration: InputDecoration(labelText: label),
+  );
+}
+
+final class SparkeeIconButton extends StatelessWidget {
+  const SparkeeIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    super.key,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) =>
+      IconButton(icon: Icon(icon), tooltip: tooltip, onPressed: onPressed);
+}
+
+final class SparkeeMenuButton<T> extends StatelessWidget {
+  const SparkeeMenuButton({
+    required this.onSelected,
+    required this.itemBuilder,
+    super.key,
+  });
+
+  final ValueChanged<T> onSelected;
+  final PopupMenuItemBuilder<T> itemBuilder;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<T>(
+    tooltip: 'More actions',
+    onSelected: onSelected,
+    itemBuilder: itemBuilder,
+  );
+}
+
+final class SparkeeStatusPill extends StatelessWidget {
+  const SparkeeStatusPill({
+    required this.label,
+    required this.color,
+    super.key,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    child: Chip(
+      label: Text(label),
+      labelStyle: TextStyle(color: color),
+      backgroundColor: SparkeeColors.surfaceSubtle,
     ),
   );
 }

@@ -36,22 +36,22 @@ final class TripDetailPage extends StatelessWidget {
         final trip = matches.first;
         return ListView(
           children: [
-            ListTile(
+            SparkeeListCard(
               title: Text(trip.registrationNumber),
-              subtitle: Text(trip.status.name),
+              subtitle: Text(trip.status.label),
             ),
-            ListTile(
+            SparkeeListCard(
               title: const Text('Route'),
               subtitle: Text(
                 '${trip.origin} → ${trip.destination ?? 'Awaiting destination'}',
               ),
             ),
-            ListTile(
+            SparkeeListCard(
               title: const Text('Started'),
               subtitle: Text(trip.startedAtUtc.toIso8601String()),
             ),
             if (trip.completedAtUtc != null)
-              ListTile(
+              SparkeeListCard(
                 title: const Text('Completed'),
                 subtitle: Text(trip.completedAtUtc!.toIso8601String()),
               ),
