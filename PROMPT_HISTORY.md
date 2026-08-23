@@ -1,5 +1,37 @@
 # Respond to greeting
 
+## How this AI-first development history works
+
+This file is the complete chronological record of the project conversation. It
+is intentionally preserved below this guide so a reviewer can inspect both the
+prompts and the resulting Codex responses.
+
+The workflow was directed by the developer and executed with Codex:
+
+1. Establish repository context, product scope, architecture, and rules.
+2. Ask Codex to inspect the current state and propose a plan.
+3. Approve a concrete checklist before implementation.
+4. Have Codex implement code, tests, documentation, and validation.
+5. Feed failures and measured results back into the conversation.
+6. Refine the plan when evidence exposed a bug, performance issue, or missing
+   requirement.
+7. Review the resulting code yourself before asking Codex to commit it.
+
+## Prompt patterns used
+
+| Prompt type | Example request | Typical Codex response |
+| --- | --- | --- |
+| Foundation | “Create the AI repository foundation; plan it first.” | Context files, rules, architecture boundaries, and a planning workflow |
+| Planning | “Scan LCOV and plan tests for uncovered files.” | Coverage inspection, affected files, test cases, and acceptance criteria |
+| Architecture | “Introduce a separate read connection and retain one writer.” | Trade-off analysis, ADR, migration/concurrency plan, and validation strategy |
+| Implementation | “Implement the approved checklist.” | Scoped code changes, tests, documentation, and verification commands |
+| Diagnosis | “Vehicles are offline again.” | Evidence-based investigation, likely cause, corrective plan, and regression tests |
+| Performance | “Measure 500 vehicles and 2 million signals.” | Device benchmark, query statistics, memory capture, diagnosis, and report |
+| Handoff | “Commit the code.” | Final checks, scoped conventional commit, and clean-worktree confirmation |
+
+The full transcript that follows contains the original prompts, approvals,
+decisions, implementation updates, failures, measurements, and handoffs.
+
 > Hi
 
 Hi! What would you like to work on?
