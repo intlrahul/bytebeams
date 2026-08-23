@@ -12,7 +12,7 @@ This is a private GitHub repository. Access has been granted to
 can review the repository at
 [github.com/intlrahul/bytebeams](https://github.com/intlrahul/bytebeams).
 
-## AI-first development
+## AI Chat History
 
 [`PROMPT_HISTORY.md`](PROMPT_HISTORY.md) records the complete development
 conversation. I used Codex through a ChatGPT Plus subscription and consumed one
