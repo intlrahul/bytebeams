@@ -11,31 +11,31 @@ final class GeofenceSeed {
     );
     final existingIds = existing.map((row) => row.single! as String).toSet();
     const seeds = [
-      ('demo-sarjapur-hub', 'Sarjapur Hub (demo)', 12.9016, 77.6877, 1000.0),
+      ('demo-sarjapur-hub', 'Sarjapur Hub', 12.9016, 77.6877, 1000.0),
       (
         'demo-electronic-city-depot',
-        'Electronic City Depot (demo)',
+        'Electronic City Depot',
         12.8456,
         77.6603,
         1000.0,
       ),
       (
         'demo-whitefield-service-yard',
-        'Whitefield Service Yard (demo)',
+        'Whitefield Service Yard',
         12.9698,
         77.7499,
         1000.0,
       ),
       (
         'demo-peenya-logistics-hub',
-        'Peenya Logistics Hub (demo)',
+        'Peenya Logistics Hub',
         13.0285,
         77.5197,
         1000.0,
       ),
       (
         'demo-yelahanka-charging-yard',
-        'Yelahanka Charging Yard (demo)',
+        'Yelahanka Charging Yard',
         13.1007,
         77.5963,
         1000.0,
