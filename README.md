@@ -5,12 +5,14 @@ electric vehicles. A Flutter client persists authoritative fleet data in
 DuckDB, while a local Node.js server provides deterministic bootstrap data and
 replayable live telemetry over Server-Sent Events (SSE).
 
-## Start with the documentation
+## Reviewer access
 
-This repository was developed using an **AI-first workflow**. Product intent,
-architecture, decisions, acceptance criteria, and validation evidence were
-documented before and alongside implementation. Review the documentation as
-the foundation of the code:
+This is a private GitHub repository. Access has been granted to
+`hiring@bytebeam.io` and `pranavk@bytebeam.io` as project collaborators; they
+can review the repository at
+[github.com/intlrahul/bytebeams](https://github.com/intlrahul/bytebeams).
+
+## AI-first development
 
 [`PROMPT_HISTORY.md`](PROMPT_HISTORY.md) records the complete development
 conversation. I used Codex through a ChatGPT Plus subscription and consumed one
@@ -19,6 +21,13 @@ project. I did not manually write any line of code: I created the initial plan,
 made the product and architecture decisions, reviewed the results, and refined
 the plan as the implementation evolved; Codex generated the repository changes
 under that direction.
+
+## Start with the documentation
+
+This repository was developed using an **AI-first workflow**. Product intent,
+architecture, decisions, acceptance criteria, and validation evidence were
+documented before and alongside implementation. Review the documentation as
+the foundation of the code:
 
 1. [Project context](context.md)
 2. [Product brief](docs/product/product-brief.md)
