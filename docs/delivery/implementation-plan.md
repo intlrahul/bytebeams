@@ -343,6 +343,12 @@ Update status only when repository evidence supports it. A milestone is not comp
 
 **Decisions before implementation:** final visual design, localization scope, analytics event catalogue, performance budgets, and whether iOS/web become supported demo targets.
 
+**Performance preparation:** A dedicated Android integration harness seeds 500
+vehicles and 2,000,000 deterministic signal rows, verifies the production Fleet
+Home projection, and reports in-app first-populated-frame plus warm query p50
+and p95 measurements. Device measurements and the remaining Milestone 12 scope
+are still required before this milestone can be marked complete.
+
 ## Milestone dependency sequence
 
 ```text
