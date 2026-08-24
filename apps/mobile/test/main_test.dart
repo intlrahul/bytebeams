@@ -1,5 +1,6 @@
 import 'package:bytebeams/app_runtime.dart';
 import 'package:bytebeams/core/data/database/app_database.dart';
+import 'package:bytebeams/core/diagnostics/startup_performance_monitor.dart';
 import 'package:bytebeams/main.dart';
 import 'package:bytebeams/features/sync/domain/app_event_bus.dart';
 import 'package:bytebeams/features/sync/domain/sync_models.dart';
@@ -17,11 +18,13 @@ void main() {
 
     await runByteBeamsApp(
       isAndroidEmulator: true,
-      openRuntime: ({required isAndroidEmulator}) async {
-        expect(isAndroidEmulator, isTrue);
-        log.add('open');
-        return runtime;
-      },
+      openRuntime:
+          ({required isAndroidEmulator, required performanceMonitor}) async {
+            expect(isAndroidEmulator, isTrue);
+            expect(performanceMonitor, isA<StartupPerformanceMonitor>());
+            log.add('open');
+            return runtime;
+          },
       appRunner: (_) => log.add('render'),
     );
 

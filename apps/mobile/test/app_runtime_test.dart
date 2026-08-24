@@ -1,6 +1,7 @@
 import 'package:bytebeams/app_runtime.dart';
 import 'package:bytebeams/core/data/database/app_database.dart';
 import 'package:bytebeams/core/data/database/app_database_factory.dart';
+import 'package:bytebeams/core/diagnostics/startup_performance_monitor.dart';
 import 'package:bytebeams/features/sync/domain/app_event_bus.dart';
 import 'package:bytebeams/features/sync/domain/sync_models.dart';
 import 'package:bytebeams/features/sync/domain/sync_repository.dart';
@@ -39,23 +40,46 @@ void main() {
   test('given_database_opener_when_production_runtime_opened_then_uses_opened_local_database', () async {
     final log = <String>[];
     final database = _Database(log);
+    final monitor = _PerformanceMonitor();
 
     final runtime = await AppRuntime.open(
       isAndroidEmulator: true,
       databaseOpener: _Opener(database, log),
+      performanceMonitor: monitor,
     );
 
     expect(runtime.database, same(database));
     expect(log, ['database.open']);
+    expect(monitor.stages, [
+      'database_open_started',
+      'database_open_completed',
+      'database_state_resolved',
+    ]);
+    expect(monitor.fields.last['startupMode'], 'fresh');
 
+    await runtime.close();
+  });
+
+  test('given_saved_vehicle_when_production_runtime_opened_then_marks_restored_startup', () async {
+    final log = <String>[];
+    final monitor = _PerformanceMonitor();
+
+    final runtime = await AppRuntime.open(
+      isAndroidEmulator: true,
+      databaseOpener: _Opener(_Database(log, hasSavedVehicle: true), log),
+      performanceMonitor: monitor,
+    );
+
+    expect(monitor.fields.last['startupMode'], 'restored');
     await runtime.close();
   });
 }
 
 final class _Database implements AppDatabase {
-  _Database(this.log);
+  _Database(this.log, {this.hasSavedVehicle = false});
 
   final List<String> log;
+  final bool hasSavedVehicle;
 
   @override
   Future<void> close() async => log.add('database.close');
@@ -73,12 +97,27 @@ final class _Database implements AppDatabase {
   Future<List<List<Object?>>> query(
     String sql, {
     List<Object?> parameters = const [],
-  }) async => const [];
+  }) async => sql == 'SELECT COUNT(*) FROM vehicles'
+      ? [
+          [hasSavedVehicle ? 1 : 0],
+        ]
+      : const [];
 
   @override
   Future<T> transaction<T>(
     Future<T> Function(DatabaseTransaction transaction) action,
   ) => action(this);
+}
+
+final class _PerformanceMonitor implements StartupPerformanceMonitor {
+  final stages = <String>[];
+  final fields = <Map<String, Object?>>[];
+
+  @override
+  void mark(String stage, {Map<String, Object?> fields = const {}}) {
+    stages.add(stage);
+    this.fields.add(fields);
+  }
 }
 
 final class _Repository implements SyncRepository {

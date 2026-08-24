@@ -1,4 +1,5 @@
 import 'package:bytebeams/app_runtime.dart';
+import 'package:bytebeams/core/diagnostics/startup_performance_monitor.dart';
 import 'package:bytebeams/core/time/clock.dart';
 import 'package:bytebeams/features/alerts/data/duckdb_alert_repository.dart';
 import 'package:bytebeams/features/alerts/domain/alert_repository.dart';
@@ -25,7 +26,10 @@ import 'package:get_it/get_it.dart';
 
 /// Composition-root-only service registration for application adapters.
 final class AppDependencies {
-  AppDependencies(AppRuntime runtime) : _services = GetIt.asNewInstance() {
+  AppDependencies(
+    AppRuntime runtime, {
+    StartupPerformanceMonitor? performanceMonitor,
+  }) : _services = GetIt.asNewInstance() {
     _services
       ..registerSingleton<AppRuntime>(runtime)
       ..registerSingleton<FleetHomeRepository>(
@@ -109,6 +113,7 @@ final class AppDependencies {
           useDemoData: _services<UseDemoData>(),
           eventBus: runtime.eventBus,
           syncRepository: runtime.syncRepository,
+          performanceMonitor: performanceMonitor ?? runtime.performanceMonitor,
         ),
       );
   }

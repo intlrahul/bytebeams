@@ -23,83 +23,94 @@ final class _FleetHomeView extends StatelessWidget {
   const _FleetHomeView();
 
   @override
-  Widget build(BuildContext context) =>
-      BlocBuilder<FleetHomeBloc, FleetHomeState>(
-        builder: (context, state) {
-          if (state.snapshot == null && state.isLoading) {
-            return const SparkeeAppScaffold(
-              title: 'Fleet',
-              body: SparkeeLoadingState(label: 'Loading saved fleet data'),
-            );
-          }
-          if (state.snapshot == null && state.failure != null) {
-            return const SparkeeAppScaffold(
-              title: 'Fleet',
-              body: SparkeeErrorState(
-                message: 'Saved fleet data could not be read.',
-              ),
-            );
-          }
-          final snapshot = state.snapshot;
-          if (snapshot == null) {
-            return const SparkeeAppScaffold(
-              title: 'Fleet',
-              body: SparkeeLoadingState(label: 'Preparing fleet data'),
-            );
-          }
-          return SparkeeAppScaffold(
+  Widget build(
+    BuildContext context,
+  ) => BlocListener<FleetHomeBloc, FleetHomeState>(
+    listenWhen: (previous, current) =>
+        current.dataRevision > previous.dataRevision,
+    listener: (context, state) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        context.read<FleetHomeBloc>().reportFleetListRendered(state);
+      });
+    },
+    child: BlocBuilder<FleetHomeBloc, FleetHomeState>(
+      builder: (context, state) {
+        if (state.snapshot == null && state.isLoading) {
+          return const SparkeeAppScaffold(
             title: 'Fleet',
-            actions: [
-              SparkeeIconButton(
-                icon: Icons.fence_outlined,
-                tooltip: 'Geofences',
-                onPressed: () => context.push('/geofences'),
-              ),
-              SparkeeIconButton(
-                icon: Icons.route_outlined,
-                tooltip: 'Trips',
-                onPressed: () => context.push('/trips'),
-              ),
-            ],
-            body: Column(
-              children: [
-                if (state.isSyncing)
-                  const SparkeeInlineNotice(
-                    label: 'Syncing fleet updates',
-                    isLoading: true,
-                  )
-                else if (state.degradedFailure != null)
-                  const SparkeeInlineNotice(
-                    label: 'Showing saved fleet data; sync needs attention',
-                  ),
-                if (state.demoDataFailure != null)
-                  _DemoDataFallback(isLoading: state.isImportingDemoData),
-                _FleetFilters(counts: snapshot.counts, selected: state.filter),
-                Expanded(
-                  child: state.isEmptyFilter
-                      ? SparkeeEmptyState(
-                          title:
-                              'No ${state.filter.label.toLowerCase()} vehicles',
-                          message: 'Try another fleet status.',
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(SparkeeSpacing.md),
-                          itemCount: snapshot.rows.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: SparkeeSpacing.sm),
-                          itemBuilder: (_, index) => _FleetRow(
-                            row: snapshot.rows[index],
-                            onTap: () => context.push(
-                              '/vehicles/${snapshot.rows[index].vehicleId}',
-                            ),
-                          ),
-                        ),
-                ),
-              ],
+            body: SparkeeLoadingState(label: 'Loading saved fleet data'),
+          );
+        }
+        if (state.snapshot == null && state.failure != null) {
+          return const SparkeeAppScaffold(
+            title: 'Fleet',
+            body: SparkeeErrorState(
+              message: 'Saved fleet data could not be read.',
             ),
           );
-        },
-      );
+        }
+        final snapshot = state.snapshot;
+        if (snapshot == null) {
+          return const SparkeeAppScaffold(
+            title: 'Fleet',
+            body: SparkeeLoadingState(label: 'Preparing fleet data'),
+          );
+        }
+        return SparkeeAppScaffold(
+          title: 'Fleet',
+          actions: [
+            SparkeeIconButton(
+              icon: Icons.fence_outlined,
+              tooltip: 'Geofences',
+              onPressed: () => context.push('/geofences'),
+            ),
+            SparkeeIconButton(
+              icon: Icons.route_outlined,
+              tooltip: 'Trips',
+              onPressed: () => context.push('/trips'),
+            ),
+          ],
+          body: Column(
+            children: [
+              if (state.isSyncing)
+                const SparkeeInlineNotice(
+                  label: 'Syncing fleet updates',
+                  isLoading: true,
+                )
+              else if (state.degradedFailure != null)
+                const SparkeeInlineNotice(
+                  label: 'Showing saved fleet data; sync needs attention',
+                ),
+              if (state.demoDataFailure != null)
+                _DemoDataFallback(isLoading: state.isImportingDemoData),
+              _FleetFilters(counts: snapshot.counts, selected: state.filter),
+              Expanded(
+                child: state.isEmptyFilter
+                    ? SparkeeEmptyState(
+                        title:
+                            'No ${state.filter.label.toLowerCase()} vehicles',
+                        message: 'Try another fleet status.',
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(SparkeeSpacing.md),
+                        itemCount: snapshot.rows.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: SparkeeSpacing.sm),
+                        itemBuilder: (_, index) => _FleetRow(
+                          row: snapshot.rows[index],
+                          onTap: () => context.push(
+                            '/vehicles/${snapshot.rows[index].vehicleId}',
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
 }
 
 final class _DemoDataFallback extends StatelessWidget {

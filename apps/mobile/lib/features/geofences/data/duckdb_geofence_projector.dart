@@ -57,27 +57,29 @@ final class DuckDbGeofenceProjector implements GeofenceProjector {
       'DELETE FROM geofence_transition_candidates WHERE vehicle_id IN (${List.filled(ids.length, '?').join(', ')})',
       parameters: ids,
     );
+    final writes = _GeofenceWrites();
     for (final id in ids) {
       final checkpoint = checkpoints[id];
-      await _rebuildVehicle(
-        database,
+      _rebuildVehicle(
         id,
         byVehicle[id] ?? const [],
         versions,
         initialTarget: checkpoint?.target,
         hasInitialBaseline: checkpoint != null,
+        writes: writes,
       );
     }
+    await writes.persist(database);
   }
 
-  Future<void> _rebuildVehicle(
-    DatabaseTransaction database,
+  void _rebuildVehicle(
     String vehicleId,
     List<_Location> locations,
     List<GeofenceVersionRecord> versions, {
     required _Target? initialTarget,
     required bool hasInitialBaseline,
-  }) async {
+    required _GeofenceWrites writes,
+  }) {
     var confirmed = initialTarget;
     _Candidate? candidate;
     var hasBaseline = hasInitialBaseline;
@@ -98,89 +100,80 @@ final class DuckDbGeofenceProjector implements GeofenceProjector {
       if (!hasBaseline) {
         hasBaseline = true;
       } else {
-        await _writeTransitions(
-          database,
+        _writeTransitions(
           vehicleId,
           confirmed,
           target,
           candidate.location,
+          writes,
         );
       }
       confirmed = target;
       candidate = null;
     }
     if (candidate != null) {
-      await database.execute(
-        'INSERT INTO geofence_transition_candidates (vehicle_id, candidate_geofence_id, candidate_version, first_event_timestamp_utc, first_packet_id, supporting_reading_count) VALUES (?, ?, ?, ?, ?, ?)',
-        parameters: [
-          vehicleId,
-          candidate.target?.geofence?.id,
-          candidate.target?.geofence?.version,
-          candidate.location.eventTimestampUtc.toIso8601String(),
-          candidate.location.packetId,
-          1,
-        ],
-      );
+      writes.candidates.add([
+        vehicleId,
+        candidate.target?.geofence?.id,
+        candidate.target?.geofence?.version,
+        candidate.location.eventTimestampUtc.toIso8601String(),
+        candidate.location.packetId,
+        1,
+      ]);
     }
     if (hasBaseline && lastDecisive != null) {
-      await database.execute(
-        'INSERT INTO vehicle_geofence_memberships (vehicle_id, geofence_id, geofence_version, observed_at_utc, packet_id) VALUES (?, ?, ?, ?, ?)',
-        parameters: [
-          vehicleId,
-          confirmed?.geofence?.id,
-          confirmed?.geofence?.version,
-          lastDecisive.eventTimestampUtc.toIso8601String(),
-          lastDecisive.packetId,
-        ],
-      );
+      writes.memberships.add([
+        vehicleId,
+        confirmed?.geofence?.id,
+        confirmed?.geofence?.version,
+        lastDecisive.eventTimestampUtc.toIso8601String(),
+        lastDecisive.packetId,
+      ]);
     }
   }
 
-  Future<void> _writeTransitions(
-    DatabaseTransaction database,
+  void _writeTransitions(
     String vehicleId,
     _Target? previous,
     _Target? next,
     _Location firstSupport,
-  ) async {
+    _GeofenceWrites writes,
+  ) {
     if (previous?.geofence != null) {
-      await _insertTransition(
-        database,
+      _insertTransition(
         vehicleId,
         previous!.geofence!,
         'exit',
         firstSupport,
+        writes,
       );
     }
     if (next?.geofence != null) {
-      await _insertTransition(
-        database,
+      _insertTransition(
         vehicleId,
         next!.geofence!,
         'entry',
         firstSupport,
+        writes,
       );
     }
   }
 
-  Future<void> _insertTransition(
-    DatabaseTransaction database,
+  void _insertTransition(
     String vehicleId,
     GeofenceVersionRecord geofence,
     String type,
     _Location location,
-  ) => database.execute(
-    'INSERT INTO geofence_transitions (transition_id, vehicle_id, geofence_id, geofence_version, transition_type, event_timestamp_utc, packet_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    parameters: [
-      '$vehicleId:${geofence.id}:${geofence.version}:$type:${location.eventTimestampUtc.toIso8601String()}:${location.packetId}',
-      vehicleId,
-      geofence.id,
-      geofence.version,
-      type,
-      location.eventTimestampUtc.toIso8601String(),
-      location.packetId,
-    ],
-  );
+    _GeofenceWrites writes,
+  ) => writes.transitions.add([
+    '$vehicleId:${geofence.id}:${geofence.version}:$type:${location.eventTimestampUtc.toIso8601String()}:${location.packetId}',
+    vehicleId,
+    geofence.id,
+    geofence.version,
+    type,
+    location.eventTimestampUtc.toIso8601String(),
+    location.packetId,
+  ]);
 
   _Target? _targetFor(
     _Location location,
@@ -285,6 +278,54 @@ WHERE transition.vehicle_id IN (${List.filled(vehicleCount, '?').join(', ')})
     )
   )
 ''';
+}
+
+final class _GeofenceWrites {
+  final memberships = <List<Object?>>[];
+  final candidates = <List<Object?>>[];
+  final transitions = <List<Object?>>[];
+
+  Future<void> persist(DatabaseTransaction database) async {
+    await _insertAll(
+      database,
+      'vehicle_geofence_memberships',
+      '(vehicle_id, geofence_id, geofence_version, observed_at_utc, packet_id)',
+      memberships,
+    );
+    await _insertAll(
+      database,
+      'geofence_transition_candidates',
+      '(vehicle_id, candidate_geofence_id, candidate_version, first_event_timestamp_utc, first_packet_id, supporting_reading_count)',
+      candidates,
+    );
+    await _insertAll(
+      database,
+      'geofence_transitions',
+      '(transition_id, vehicle_id, geofence_id, geofence_version, transition_type, event_timestamp_utc, packet_id)',
+      transitions,
+    );
+  }
+
+  Future<void> _insertAll(
+    DatabaseTransaction database,
+    String table,
+    String columns,
+    List<List<Object?>> values,
+  ) async {
+    const chunkSize = 100;
+    for (var start = 0; start < values.length; start += chunkSize) {
+      final end = (start + chunkSize).clamp(0, values.length);
+      final chunk = values.sublist(start, end);
+      final placeholders = List.filled(
+        chunk.length,
+        '(${List.filled(chunk.first.length, '?').join(', ')})',
+      ).join(', ');
+      await database.execute(
+        'INSERT INTO $table $columns VALUES $placeholders',
+        parameters: [for (final row in chunk) ...row],
+      );
+    }
+  }
 }
 
 final class _ReplayCheckpoint {

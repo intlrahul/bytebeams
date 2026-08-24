@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:bytebeams/app_dependencies.dart';
 import 'package:bytebeams/app_router.dart';
 import 'package:bytebeams/app_runtime.dart';
+import 'package:bytebeams/core/diagnostics/app_logger.dart';
+import 'package:bytebeams/core/diagnostics/startup_performance_monitor.dart';
 import 'package:bytebeams/core/design/sparkee/sparkee_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,20 +15,40 @@ Future<void> main() async {
   await runByteBeamsApp(
     isAndroidEmulator:
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
-    openRuntime: ({required isAndroidEmulator}) =>
-        AppRuntime.open(isAndroidEmulator: isAndroidEmulator),
+    openRuntime: ({required isAndroidEmulator, required performanceMonitor}) =>
+        AppRuntime.open(
+          isAndroidEmulator: isAndroidEmulator,
+          performanceMonitor: performanceMonitor,
+        ),
     appRunner: runApp,
   );
 }
 
 Future<void> runByteBeamsApp({
   required bool isAndroidEmulator,
-  required Future<AppRuntime> Function({required bool isAndroidEmulator})
+  required Future<AppRuntime> Function({
+    required bool isAndroidEmulator,
+    required StartupPerformanceMonitor performanceMonitor,
+  })
   openRuntime,
   required void Function(Widget app) appRunner,
 }) async {
-  final runtime = await openRuntime(isAndroidEmulator: isAndroidEmulator);
-  appRunner(ByteBeamsApp(dependencies: AppDependencies(runtime)));
+  final performanceMonitor = kDebugMode
+      ? DebugStartupPerformanceMonitor(DebugAppLogger())
+      : const NoOpStartupPerformanceMonitor();
+  performanceMonitor.mark('app_launch_started');
+  final runtime = await openRuntime(
+    isAndroidEmulator: isAndroidEmulator,
+    performanceMonitor: performanceMonitor,
+  );
+  appRunner(
+    ByteBeamsApp(
+      dependencies: AppDependencies(
+        runtime,
+        performanceMonitor: performanceMonitor,
+      ),
+    ),
+  );
   unawaited(runtime.startBackgroundSync());
 }
 

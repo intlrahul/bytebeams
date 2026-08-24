@@ -1,4 +1,5 @@
 import 'package:bytebeams/core/data/database/app_database.dart';
+import 'package:bytebeams/core/diagnostics/startup_performance_monitor.dart';
 import 'package:bytebeams/features/alerts/data/duckdb_alert_projector.dart';
 import 'package:bytebeams/features/geofences/data/duckdb_geofence_projector.dart';
 import 'package:bytebeams/features/trips/data/duckdb_trip_projector.dart';
@@ -31,6 +32,7 @@ final class DuckDbSyncStore implements SyncStore {
     this._tripProjector,
     this.retentionCleanup,
     this.projectionRebuildService,
+    this.performanceMonitor = const NoOpStartupPerformanceMonitor(),
   });
 
   final AppDatabase _database;
@@ -40,6 +42,7 @@ final class DuckDbSyncStore implements SyncStore {
   final TripProjector? _tripProjector;
   final RetentionCleanup? retentionCleanup;
   final ProjectionRebuildService? projectionRebuildService;
+  final StartupPerformanceMonitor performanceMonitor;
 
   @override
   Future<String?> deliveryCursor() async {
@@ -58,8 +61,19 @@ final class DuckDbSyncStore implements SyncStore {
     SyncBootstrapDto bootstrap, {
     required String origin,
   }) => _database.transaction((transaction) async {
+    final vehicleTimer = Stopwatch()..start();
     await _upsertVehicles(transaction, bootstrap.vehicles);
+    performanceMonitor.mark(
+      'bootstrap_vehicle_upsert_completed',
+      fields: {'durationMs': vehicleTimer.elapsedMilliseconds},
+    );
+    final packetTimer = Stopwatch()..start();
     await _insertPackets(transaction, bootstrap.telemetry);
+    performanceMonitor.mark(
+      'bootstrap_packet_insert_completed',
+      fields: {'durationMs': packetTimer.elapsedMilliseconds},
+    );
+    final projectionTimer = Stopwatch()..start();
     await (projectionRebuildService ??
             DuckDbProjectionRebuildService(
               alertProjector: _alertProjector,
@@ -70,7 +84,16 @@ final class DuckDbSyncStore implements SyncStore {
           transaction,
           bootstrap.vehicles.map((vehicle) => vehicle.vehicleId),
         );
+    performanceMonitor.mark(
+      'bootstrap_projection_rebuild_completed',
+      fields: {'durationMs': projectionTimer.elapsedMilliseconds},
+    );
+    final retentionTimer = Stopwatch()..start();
     await retentionCleanup?.runIfDue(transaction);
+    performanceMonitor.mark(
+      'bootstrap_retention_completed',
+      fields: {'durationMs': retentionTimer.elapsedMilliseconds},
+    );
     await transaction.execute(
       upsertSyncCursor,
       parameters: [bootstrap.deliveryCursor],

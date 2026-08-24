@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bytebeams/core/diagnostics/startup_performance_monitor.dart';
 import 'package:bytebeams/features/fleet_home/domain/fleet_home_models.dart';
 import 'package:bytebeams/features/fleet_home/domain/get_fleet_home.dart';
 import 'package:bytebeams/features/sync/domain/app_event_bus.dart';
@@ -44,6 +45,8 @@ final class FleetHomeState {
     this.isLoading = false,
     this.isSyncing = false,
     this.isImportingDemoData = false,
+    this.dataRevision = 0,
+    this.lastQuerySource = 'saved_data',
     this.degradedFailure,
     this.demoDataFailure,
     this.failure,
@@ -54,6 +57,8 @@ final class FleetHomeState {
   final bool isLoading;
   final bool isSyncing;
   final bool isImportingDemoData;
+  final int dataRevision;
+  final String lastQuerySource;
   final SyncFailure? degradedFailure;
   final SyncFailure? demoDataFailure;
   final FleetHomeFailure? failure;
@@ -67,6 +72,8 @@ final class FleetHomeState {
     bool? isLoading,
     bool? isSyncing,
     bool? isImportingDemoData,
+    int? dataRevision,
+    String? lastQuerySource,
     SyncFailure? degradedFailure,
     SyncFailure? demoDataFailure,
     FleetHomeFailure? failure,
@@ -79,6 +86,8 @@ final class FleetHomeState {
     isLoading: isLoading ?? this.isLoading,
     isSyncing: isSyncing ?? this.isSyncing,
     isImportingDemoData: isImportingDemoData ?? this.isImportingDemoData,
+    dataRevision: dataRevision ?? this.dataRevision,
+    lastQuerySource: lastQuerySource ?? this.lastQuerySource,
     degradedFailure: clearDegradedFailure
         ? null
         : (degradedFailure ?? this.degradedFailure),
@@ -95,7 +104,10 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
     UseDemoData? useDemoData,
     required AppEventBus eventBus,
     required SyncRepository syncRepository,
+    StartupPerformanceMonitor? performanceMonitor,
   }) : useDemoData = useDemoData ?? UseDemoData(repository: syncRepository),
+       _performanceMonitor =
+           performanceMonitor ?? const NoOpStartupPerformanceMonitor(),
        super(const FleetHomeState()) {
     on<FleetHomeStarted>(_onRefresh);
     on<FleetHomeFilterSelected>(_onFilterSelected);
@@ -115,6 +127,8 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
 
   final GetFleetHome getFleetHome;
   final UseDemoData useDemoData;
+  final StartupPerformanceMonitor _performanceMonitor;
+  var _lastRenderedRevision = 0;
   late final StreamSubscription<AppEvent> _eventSubscription;
   late final StreamSubscription<SyncState> _syncSubscription;
 
@@ -125,6 +139,14 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
     if (state.snapshot == null) {
       emit(state.copyWith(isLoading: true, clearFailure: true));
     }
+    final source = event is FleetHomeDataCommitted
+        ? 'committed_data'
+        : 'saved_data';
+    _performanceMonitor.mark(
+      'fleet_list_query_started',
+      fields: {'source': source},
+    );
+    final queryTimer = Stopwatch()..start();
     final result = await getFleetHome(state.filter);
     switch (result) {
       case Success<FleetHomeSnapshot, FleetHomeFailure>(value: final snapshot):
@@ -132,8 +154,18 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
           state.copyWith(
             snapshot: snapshot,
             isLoading: false,
+            dataRevision: state.dataRevision + 1,
+            lastQuerySource: source,
             clearFailure: true,
           ),
+        );
+        _performanceMonitor.mark(
+          'fleet_list_query_completed',
+          fields: {
+            'source': source,
+            'rowCount': snapshot.rows.length,
+            'durationMs': queryTimer.elapsedMilliseconds,
+          },
         );
       case Failure<FleetHomeSnapshot, FleetHomeFailure>(failure: final failure):
         emit(state.copyWith(isLoading: false, failure: failure));
@@ -147,6 +179,12 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
     emit(
       state.copyWith(filter: event.filter, isLoading: state.snapshot == null),
     );
+    const source = 'interactive';
+    _performanceMonitor.mark(
+      'fleet_list_query_started',
+      fields: {'source': source},
+    );
+    final queryTimer = Stopwatch()..start();
     final result = await getFleetHome(event.filter);
     switch (result) {
       case Success<FleetHomeSnapshot, FleetHomeFailure>(value: final snapshot):
@@ -154,12 +192,37 @@ final class FleetHomeBloc extends Bloc<FleetHomeEvent, FleetHomeState> {
           state.copyWith(
             snapshot: snapshot,
             isLoading: false,
+            dataRevision: state.dataRevision + 1,
+            lastQuerySource: source,
             clearFailure: true,
           ),
+        );
+        _performanceMonitor.mark(
+          'fleet_list_query_completed',
+          fields: {
+            'source': source,
+            'rowCount': snapshot.rows.length,
+            'durationMs': queryTimer.elapsedMilliseconds,
+          },
         );
       case Failure<FleetHomeSnapshot, FleetHomeFailure>(failure: final failure):
         emit(state.copyWith(isLoading: false, failure: failure));
     }
+  }
+
+  void reportFleetListRendered(FleetHomeState renderedState) {
+    if (renderedState.dataRevision <= _lastRenderedRevision ||
+        renderedState.snapshot == null) {
+      return;
+    }
+    _lastRenderedRevision = renderedState.dataRevision;
+    _performanceMonitor.mark(
+      'fleet_list_rendered',
+      fields: {
+        'source': renderedState.lastQuerySource,
+        'rowCount': renderedState.snapshot!.rows.length,
+      },
+    );
   }
 
   void _onSyncStateChanged(

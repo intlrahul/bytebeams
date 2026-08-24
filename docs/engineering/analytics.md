@@ -40,3 +40,23 @@ The sync coordinator emits `telemetry.packet.received` after a delivery commits 
 When implementation is planned, consider sanitized events for bootstrap outcome, SSE connection/reconnect/replay gap, ingestion classification counts, migration outcome, projection/replay duration, and retention cleanup. Event names and properties require approval with the implementing feature; this list is not permission to add them silently.
 
 Analytics never substitutes for durable alert, transition, trip, or sync state.
+
+## Startup performance trace
+
+Debug builds emit a local `startup.performance` timeline for every app launch.
+Release builds use a no-op adapter. The trace contains only `stage`, monotonic
+`elapsedMs`, `startupMode` (`fresh` or `restored` once DuckDB has opened),
+safe aggregate counts, and a Fleet Home source (`saved_data`, `committed_data`,
+or `interactive`). It never includes vehicle IDs, packet IDs, signal values, HTTP
+bodies, SSE frames, or database contents.
+
+The stage sequence is: `app_launch_started`, `database_open_started`,
+`database_open_completed`, `database_state_resolved`,
+`bootstrap_request_started`, `bootstrap_response_received`,
+`bootstrap_persistence_started`, `bootstrap_persistence_completed`,
+`bootstrap_vehicle_upsert_completed`, `bootstrap_packet_insert_completed`,
+`bootstrap_projection_rebuild_completed`, `bootstrap_retention_completed`,
+`fleet_list_query_started`, `fleet_list_query_completed`, and the post-frame
+`fleet_list_rendered`. A restored launch normally renders saved data before the
+background bootstrap completes; a fresh launch normally renders its populated
+list after the bootstrap persistence commit.

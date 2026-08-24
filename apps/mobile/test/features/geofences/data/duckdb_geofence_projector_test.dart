@@ -6,14 +6,11 @@ void main() {
   test('given_confirmed_direct_move_when_rebuilt_then_writes_exit_entry_and_membership', () async {
     final database = _Database();
     await const DuckDbGeofenceProjector().rebuild(database, ['vehicle-1']);
-    expect(
-      database.executed
-          .where(
-            (entry) => entry.$1.contains('INSERT INTO geofence_transitions'),
-          )
-          .length,
-      2,
-    );
+    final transitions = database.executed
+        .where((entry) => entry.$1.contains('INSERT INTO geofence_transitions'))
+        .single;
+    expect(transitions.$1, contains('VALUES (?, ?, ?, ?, ?, ?, ?),'));
+    expect(transitions.$2, hasLength(14));
     expect(
       database.executed
           .where(

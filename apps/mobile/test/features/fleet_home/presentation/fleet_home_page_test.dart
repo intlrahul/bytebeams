@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bytebeams/core/time/clock.dart';
+import 'package:bytebeams/core/diagnostics/startup_performance_monitor.dart';
 import 'package:bytebeams/core/design/sparkee/sparkee_theme.dart';
 import 'package:bytebeams/features/fleet_home/domain/fleet_home_models.dart';
 import 'package:bytebeams/features/fleet_home/domain/fleet_home_repository.dart';
@@ -21,6 +22,7 @@ void main() {
       final events = AsyncAppEventBus();
       final sync = _SyncRepository();
       final repository = _Repository();
+      final monitor = _PerformanceMonitor();
       await tester.pumpWidget(
         MaterialApp(
           theme: SparkeeTheme.light(),
@@ -32,6 +34,7 @@ void main() {
               ),
               eventBus: events,
               syncRepository: sync,
+              performanceMonitor: monitor,
             ),
           ),
         ),
@@ -48,6 +51,7 @@ void main() {
       expect(find.text('Stopped'), findsOneWidget);
       expect(find.text('— %'), findsOneWidget);
       expect(find.text('12.5 km'), findsOneWidget);
+      expect(monitor.stages, contains('fleet_list_rendered'));
 
       await tester.drag(find.byType(ListView), const Offset(0, -500));
       await tester.pumpAndSettle();
@@ -122,6 +126,15 @@ void main() {
       await sync.close();
     },
   );
+}
+
+final class _PerformanceMonitor implements StartupPerformanceMonitor {
+  final stages = <String>[];
+
+  @override
+  void mark(String stage, {Map<String, Object?> fields = const {}}) {
+    stages.add(stage);
+  }
 }
 
 Widget _app({

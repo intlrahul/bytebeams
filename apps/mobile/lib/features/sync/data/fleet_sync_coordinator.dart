@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bytebeams/core/diagnostics/app_logger.dart';
+import 'package:bytebeams/core/diagnostics/startup_performance_monitor.dart';
 import 'package:bytebeams/features/sync/data/demo_data_importer.dart';
 import 'package:bytebeams/features/sync/data/duckdb_sync_store.dart';
 import 'package:bytebeams/features/sync/data/fleet_remote_data_source.dart';
@@ -25,6 +26,8 @@ final class FleetSyncCoordinator implements SyncRepository {
     int maximumBatchSize = 100,
     SyncRetryScheduler retryScheduler = const SystemSyncRetryScheduler(),
     SyncRetryPolicy retryPolicy = const SyncRetryPolicy(),
+    StartupPerformanceMonitor performanceMonitor =
+        const NoOpStartupPerformanceMonitor(),
   }) => FleetSyncCoordinator._(
     remote: remote,
     store: store,
@@ -36,6 +39,7 @@ final class FleetSyncCoordinator implements SyncRepository {
     maximumBatchSize: maximumBatchSize,
     retryScheduler: retryScheduler,
     retryPolicy: retryPolicy,
+    performanceMonitor: performanceMonitor,
   );
 
   FleetSyncCoordinator._({
@@ -49,6 +53,7 @@ final class FleetSyncCoordinator implements SyncRepository {
     required this._maximumBatchSize,
     required this._retryScheduler,
     required this._retryPolicy,
+    required this._performanceMonitor,
   });
 
   final FleetRemoteDataSource _remote;
@@ -61,6 +66,7 @@ final class FleetSyncCoordinator implements SyncRepository {
   final int _maximumBatchSize;
   final SyncRetryScheduler _retryScheduler;
   final SyncRetryPolicy _retryPolicy;
+  final StartupPerformanceMonitor _performanceMonitor;
   final StreamController<SyncState> _states =
       StreamController<SyncState>.broadcast();
   SyncState _currentState = const SyncState.idle();
@@ -79,8 +85,24 @@ final class FleetSyncCoordinator implements SyncRepository {
   Future<void> synchronize() async {
     _emit(const SyncState.syncing());
     try {
+      _performanceMonitor.mark('bootstrap_request_started');
+      final requestTimer = Stopwatch()..start();
       final bootstrap = await _remote.bootstrap();
+      _performanceMonitor.mark(
+        'bootstrap_response_received',
+        fields: {
+          'vehicleCount': bootstrap.vehicles.length,
+          'packetCount': bootstrap.telemetry.length,
+          'durationMs': requestTimer.elapsedMilliseconds,
+        },
+      );
+      _performanceMonitor.mark('bootstrap_persistence_started');
+      final persistenceTimer = Stopwatch()..start();
       await _store.importBootstrap(bootstrap, origin: 'backend');
+      _performanceMonitor.mark(
+        'bootstrap_persistence_completed',
+        fields: {'durationMs': persistenceTimer.elapsedMilliseconds},
+      );
       _committed();
       unawaited(_consumeDeliveries());
       _emit(const SyncState.idle());
@@ -105,8 +127,24 @@ final class FleetSyncCoordinator implements SyncRepository {
   Future<void> refreshFromServer() async {
     _emit(const SyncState.syncing());
     try {
+      _performanceMonitor.mark('bootstrap_request_started');
+      final requestTimer = Stopwatch()..start();
       final bootstrap = await _remote.bootstrap();
+      _performanceMonitor.mark(
+        'bootstrap_response_received',
+        fields: {
+          'vehicleCount': bootstrap.vehicles.length,
+          'packetCount': bootstrap.telemetry.length,
+          'durationMs': requestTimer.elapsedMilliseconds,
+        },
+      );
+      _performanceMonitor.mark('bootstrap_persistence_started');
+      final persistenceTimer = Stopwatch()..start();
       await _store.replaceBackendData(bootstrap);
+      _performanceMonitor.mark(
+        'bootstrap_persistence_completed',
+        fields: {'durationMs': persistenceTimer.elapsedMilliseconds},
+      );
       _committed();
       unawaited(_consumeDeliveries());
       _emit(const SyncState.idle());
