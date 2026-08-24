@@ -12338,3 +12338,284 @@ Added the AI-development disclosure to [README.md](./README.md), including:
 - You created and continuously refined the plan, decisions, and direction.
 
 README formatting and diff validation pass.
+
+> syncing the data vihicle data via bootstrap takes more than 30 secs. i could see backend sends the data like immediately but the data which is getting stored into duckdb that takes a lot of time
+
+> I’ll trace the bootstrap persistence path and its transaction boundaries to identify why the client-side DuckDB phase is taking 30+ seconds even though the backend response arrives quickly. I’ll report the evidence and a concrete fix plan before changing code.
+>
+> The current bootstrap already uses multi-row inserts, so the remaining likely cost is not the 500 vehicle upserts. I’m tracing the projection rebuild and exact bootstrap packet volume next—the transaction rebuilds alerts, geofences, and trips for every vehicle before it can commit.
+>
+
+Yes—30+ seconds is a real regression against the documented `<10s` cold-bootstrap target.
+
+The insert path is already batched: the bootstrap contains roughly **3,863 telemetry packets**, inserted in multi-row chunks. The main bottleneck is the projection rebuild that follows the insert.
+
+In particular, the geofence projector rebuilds all 500 vehicles and performs an awaited DuckDB statement per vehicle to write membership/candidate state. Each statement prepares, binds, executes, disposes, then repeats. On Android this native-call overhead can easily dominate the total time, even when the backend response is immediate.
+
+Proposed fix plan:
+
+1. Add safe phase timing for bootstrap: vehicle upsert, telemetry insert, alert rebuild, geofence rebuild, trip rebuild, retention, commit.
+2. Keep the current one-transaction atomicity and cursor semantics.
+3. Change geofence rebuild to calculate all membership/candidate/transition rows in memory, then persist each row type with bounded multi-row inserts rather than one statement per vehicle.
+4. Batch alert/trip projection writes where applicable, preserving existing deterministic IDs and ordering.
+5. Add regression tests for:
+   - identical geofence memberships, transitions, and trips;
+   - rollback leaves no partial bootstrap/cursor;
+   - 500-vehicle bootstrap remains under 10 seconds in the Android integration benchmark.
+6. Record the measured phase timings so we can confirm exactly where time was removed.
+
+This should eliminate the hundreds of Dart-to-DuckDB round trips while preserving the same final data.
+
+> lets add the timings or benchmark logs that when the api was fired when the data arrived and when db was opened when we start writing into the db and write was competed and then when read start and when the data appears on the list. it should be applicable for both fresh install and the later app opens&#x20;
+
+
+> I’ll trace the startup, bootstrap, and fleet-list paths so the timings are defined consistently for fresh installs and later opens. I’ll plan this as privacy-safe diagnostics—durations and counts only, never telemetry values or payloads—then wait for your approval before editing.
+
+We should add a single debug-only startup performance trace that logs the full timeline without telemetry payloads or vehicle identifiers.
+
+It will cover both paths:
+
+- Fresh install: app launch → DuckDB open → bootstrap request started → bootstrap response received → DuckDB write started → transaction committed → fleet-list query started/completed → first list frame rendered.
+- Later open: app launch → DuckDB open → existing local fleet-list query started/completed → first saved-data list frame rendered → background bootstrap request/write/refresh timing.
+
+Each log entry will include only:
+
+- `startup_mode`: `fresh` or `restored`
+- `stage`
+- `elapsed_ms` since launch
+- operation duration where relevant
+- safe aggregate counts such as vehicle/packet/list-row counts
+- list source: `saved_data` or `bootstrap`
+
+For example:
+
+```text
+startup.performance {
+  startup_mode: restored,
+  stage: fleet_list_rendered,
+  elapsed_ms: 184,
+  source: saved_data,
+  row_count: 500
+}
+```
+
+Implementation checklist:
+
+1. Add an application-owned, injected `PerformanceMonitor` with debug-console and no-op adapters.
+2. Start a launch trace before opening `AppRuntime`; record DB-open start/completion and whether usable local fleet data existed.
+3. Instrument `FleetSyncCoordinator` around bootstrap request, response mapping, persistence start, and committed transaction.
+4. Instrument `FleetHomeBloc` around each local DuckDB fleet query.
+5. Add a post-frame Fleet Home marker so “list rendered” means Flutter has actually painted the list, not merely returned query data.
+6. Prevent duplicate render logs for the same committed data version while still recording the later bootstrap-refresh render.
+7. Document the event names/fields in `docs/engineering/analytics.md`.
+8. Add unit/widget tests for order, fresh/restored classification, safe fields, and post-frame list rendering.
+9. Developer validation:
+   - `pnpm test:flutter`
+   - `pnpm test:flutter:integration`
+   - `pnpm format:check`
+
+This gives us the evidence needed to confirm whether the 30 seconds is insertion, projection rebuild, transaction commit, or subsequent fleet query/render. Approve this checklist and I’ll implement it continuously.
+
+> Approved
+
+
+> I’m implementing the approved debug-only startup trace now. It will use an application-owned performance boundary, with safe aggregate fields only, and will not change persistence or UI behavior.
+>
+> The trace points are now wired through runtime opening, sync, query completion, and post-frame rendering. I’m adding the regression coverage and documentation next, then I’ll run the fast static/unit checks only; the Android integration command remains for you to run.
+>
+> Static analysis and the focused unit/widget suite are passing. I’m tightening the tests to assert the actual fresh/restored startup markers and the post-frame list-render marker, rather than only testing the monitor in isolation.
+>
+> The implementation now distinguishes a restored launch from a fresh launch, times the database/open–bootstrap–write–query chain, and records the first actual rendered Fleet List frame. The static checks and focused tests pass; I’m doing the final diff review now.
+>
+Implemented the debug-only startup performance timeline.
+
+It now logs:
+
+- app launch and DuckDB open duration
+- whether startup is `fresh` or `restored`
+- bootstrap request start and response arrival
+- bootstrap packet/vehicle counts
+- DuckDB persistence start and completed duration
+- Fleet List query start/completion duration
+- post-frame `fleet_list_rendered` marker when Flutter actually displays the list
+
+This works for both fresh installs and later opens. Logs contain only safe timings, aggregate counts, and sources—no vehicle IDs or telemetry payloads. The documented event catalogue is in [analytics.md](./docs/engineering/analytics.md).
+
+Example output:
+
+```text
+startup.performance {
+  stage: bootstrap_persistence_completed,
+  elapsedMs: 31245,
+  startupMode: fresh,
+  durationMs: 29870
+}
+```
+
+Verified:
+
+- `flutter analyze` — passed
+- Focused unit/widget tests — passed
+
+To observe it on the emulator, run the debug app and inspect its Flutter console/logcat for `startup.performance`. Then we can identify the exact phase consuming the 30 seconds before optimizing it.
+
+> User context
+>
+> Attachments:
+> - startup.performance {stage: app_launch_started, elapsedMs: 1} startup.performan…: `~/.codex/attachments/72894466-eda5-45ac-8095-5ac8be87ad73/pasted-text.txt`
+
+> I’ll read the captured timeline and identify the exact slow phase, then translate it into the smallest targeted optimization plan.
+>
+
+The trace confirms the issue is entirely client-side after the API response.
+
+| Phase | Result |
+|---|---:|
+| DuckDB opened | 1.72 s |
+| Saved fleet list first rendered | 4.26 s from launch |
+| Bootstrap API request → response | ~4.11 s |
+| Bootstrap persistence | **38.40 s** |
+| Bootstrap payload | **500 vehicles / 10,000 packets** |
+
+So the backend is not the problem. The response arrives at **5.9 s**, then DuckDB import/projection work occupies the next **38.4 s**.
+
+The restored experience is still usable: the existing 500-vehicle list appears at 4.26 s. But the background sync is far above the `<10s` target.
+
+The repeated queries after 44 s are live committed-data refreshes. They are comparatively cheap—roughly 40–60 ms per Fleet List query—so they are not the primary issue. We should later verify why those commits occur around every 2–3 seconds rather than the intended five-second batch window, but they are not causing the 38-second bootstrap.
+
+One important clue: this bootstrap contains **10,000 packets**, while the current deterministic fixture itself creates roughly 3,863 packets. That means your existing backend database is returning additional retained/bootstrap history. The optimization must therefore be correct for 10k packets, not only the minimal fixture.
+
+Next implementation plan should be:
+
+1. Add sub-phase timings inside `importBootstrap`: vehicle upsert, packet classification, packet insert, alert rebuild, geofence rebuild, trip rebuild, retention, and transaction commit.
+2. Use that trace to prove the expected dominant phase—likely geofence projection’s per-vehicle DuckDB writes.
+3. Replace those per-vehicle writes with bounded multi-row inserts for memberships, candidates, transitions, and trips.
+4. Keep the one atomic transaction and cursor boundary unchanged.
+5. Add a 10,000-packet regression benchmark with a `<10s` Android-emulator target.
+
+The next run will tell us exactly how much of the 38.4 seconds is packet insertion versus geofence/trip projection, so we optimize the right component.
+
+> Approved
+
+> I’ll implement the approved sub-phase trace and remove the known per-vehicle projection writes while preserving the single transaction, deterministic transition IDs, and cursor ordering. I’ll also add a 10,000-packet regression case; device timing remains a developer-run validation.
+>
+>
+> The per-vehicle geofence persistence calls have been replaced with bounded multi-row writes, and the bootstrap trace now breaks out insert versus projection time. Static analysis passes; I’m running the relevant unit tests to verify the deterministic geofence behavior remains unchanged.
+>
+
+Implemented the targeted bootstrap optimization and deeper timing trace.
+
+Changes:
+
+- Added bootstrap sub-phase logs:
+  - vehicle upsert
+  - packet insert/classification
+  - projection rebuild
+  - retention cleanup
+  - existing total persistence duration remains available
+- Replaced geofence projection’s per-vehicle membership/candidate/transition writes with bounded multi-row inserts (100 rows per statement).
+- Preserved deterministic transition IDs, projection behavior, transaction atomicity, and cursor ordering.
+- Updated the geofence test to verify two transitions are persisted through one batched statement.
+- Documented the new trace stages in [analytics.md](./docs/engineering/analytics.md).
+
+Verified:
+
+- `flutter analyze` passed.
+- Focused geofence and sync tests passed.
+
+Please rerun the app and share the new `bootstrap_*_completed` lines. The key result will be `bootstrap_projection_rebuild_completed`: it will confirm how much of the prior 38.4 seconds was eliminated by batching the 500 geofence writes.
+
+For device validation, run:
+
+```sh
+pnpm test:flutter:integration
+```
+
+Then launch the debug app and capture `startup.performance` again.
+
+> fresh install data&#x20;
+> second app run data:&#x20;
+>
+> User context
+>
+> Attachments:
+> - startup.performance {stage: app_launch_started, elapsedMs: 1} startup.performan…: `~/.codex/attachments/bd6133d2-89b2-4b2f-9b19-0b290e4a9b49/pasted-text.txt`
+
+Fresh-install result is much better: persistence dropped from **38.4 s to 10.55 s**—about a **73% improvement**.
+
+Breakdown:
+
+| Phase | Time |
+|---|---:|
+| API response | ~3.4 s |
+| Vehicle upsert | 196 ms |
+| Packet insert, 10,000 packets | **7.20 s** |
+| Projection rebuild | 2.85 s |
+| Retention + commit | ~300 ms |
+| Data visible in populated list | **14.82 s from launch** |
+
+The geofence batching worked: projection is now 2.85 s rather than contributing to the old 38-second import. The remaining primary bottleneck is clearly the **10,000 packet insert**.
+
+A couple of observations:
+
+- The first empty Fleet List renders at **1.15 s**, so the UI is responsive.
+- On a fresh install, the populated list appears at **14.82 s**—still above the desired `<10s` bootstrap target.
+- After the bootstrap, Fleet List refresh queries are healthy: roughly **26–47 ms**.
+- We should now optimize packet insertion, not Fleet List rendering or geofence projections.
+
+The next change should focus on reducing the 7.2-second raw packet import: increase safe insert batch size / reduce prepared-statement round trips, while retaining bounded parameter counts and one transaction.
+
+Your “second app run” section has no timing lines yet. Please paste that output too; it should demonstrate the important local-first behavior: saved fleet data visible before the background bootstrap finishes.
+
+> did we make any improvement changes?
+
+Yes.
+
+We changed geofence projection persistence from hundreds of individual DuckDB writes to bounded multi-row inserts.
+
+Measured impact:
+
+- Before: bootstrap persistence **38.4 s**
+- After: bootstrap persistence **10.55 s**
+- Improvement: about **27.8 s faster / 73% reduction**
+
+The remaining slow part is the 10,000 telemetry packet insertion: **7.2 s**. The next optimization should target that insert path.
+
+> User context
+>
+> Attachments:
+> - startup.performance {stage: app_launch_started, elapsedMs: 1} startup.performan…: `~/.codex/attachments/f3bba428-e609-4b8e-857e-cc79d0f1ce71/pasted-text.txt`
+
+> I’ll compare this second capture with the fresh-install timeline and call out the local-first behavior and any remaining regression.
+
+The restored path is behaving correctly from a local-first UI perspective:
+
+- DuckDB opens in **1.63 s**
+- Saved 500-vehicle list query completes in **396 ms**
+- Saved list is visibly rendered at **2.80 s**
+- The background bootstrap does not block that first render
+
+That is the important success for a later app open.
+
+However, the background bootstrap is still unnecessarily expensive:
+
+- API response arrives at **5.36 s**
+- Persistence takes **12.03 s**
+  - packet insert: **7.51 s**
+  - projection rebuild: **4.23 s**
+
+This is slower than the fresh run because the restored database already contains the same 10,000 packet IDs, but the client still attempts the full `INSERT ... ON CONFLICT DO NOTHING` bootstrap import and rebuilds projections for all 500 vehicles.
+
+So the next optimization is not UI-related. It is to make a restored bootstrap avoid reprocessing unchanged snapshot history:
+
+- retain the atomic bootstrap/cursor boundary;
+- detect that the bootstrap cursor/history is already locally committed;
+- skip duplicate packet insertion and full 500-vehicle projection rebuild when nothing changed;
+- only process new/changed packets and affected vehicles.
+
+That would preserve the 2.8-second visible startup while removing the 12-second background churn.
+
+> commit the code
+
+> I’ll review the pending files, stage only the startup tracing and bootstrap-projection optimization work, then create one focused commit.
+>
